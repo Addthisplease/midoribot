@@ -411,14 +411,18 @@ async function backupDMChannel(channel) {
         const messageData = {
           author: msg.author.username,
           content: msg.content,
-          authorAvatar: msg.author.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 }),
+          authorAvatar: typeof msg.author.displayAvatarURL === 'function' 
+            ? msg.author.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 })
+            : msg.author.avatar || null,
           attachments: [],
           timestamp: msg.createdTimestamp,
           isGroupDM: isGroupDM,
           recipients: isGroupDM ? channel.recipients.map(r => ({
             id: r.id,
             username: r.username,
-            avatar: r.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 })
+            avatar: typeof r.displayAvatarURL === 'function'
+              ? r.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 })
+              : r.avatar || null
           })) : null
         };
 

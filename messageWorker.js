@@ -26,7 +26,15 @@ async function fetchMessages(data) {
             const fetchedMessages = await channel.messages.fetch(options);
             if (!fetchedMessages || fetchedMessages.size === 0) break;
             
-            messages.push(...Array.from(fetchedMessages.values()));
+            messages.push(...Array.from(fetchedMessages.values()).map(msg => ({
+                content: msg.content,
+                author: {
+                    username: msg.author.username,
+                    avatar: msg.author.avatar
+                },
+                attachments: Array.from(msg.attachments.values()),
+                createdTimestamp: msg.createdTimestamp
+            })));
             lastId = fetchedMessages.last().id;
             
             await delay(1000); // Rate limit delay
