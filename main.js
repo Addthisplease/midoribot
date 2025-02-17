@@ -1063,6 +1063,7 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                                     if (attachment.localPath) {
                                         const possiblePaths = [
                                             path.join(path.dirname(backupFilePath), attachment.localPath),
+                                            path.join(__dirname, 'backups', attachment.localPath),
                                             path.join(__dirname, attachment.localPath),
                                             attachment.localPath
                                         ];
@@ -1440,8 +1441,8 @@ app.post('/restore-server', upload.single('backupFile'), async (req, res) => {
                     for (const message of channelData.messages) {
                         try {
                             const messageOptions = {
-                                username: message.author,
-                                avatarURL: message.authorAvatar,
+                                username: message.webhookData?.username || message.author,
+                                avatarURL: message.webhookData?.avatarURL || message.authorAvatar,
                                 content: message.content
                             };
 
@@ -1451,28 +1452,61 @@ app.post('/restore-server', upload.single('backupFile'), async (req, res) => {
                             }
 
                             // Handle attachments
-                            for (const attachment of message.attachments) {
-                                if (attachment.localPath) {
-                                    const attachmentPath = path.join(path.dirname(req.file.path), attachment.localPath);
-                                    if (fsSync.existsSync(attachmentPath)) {
-                                        await webhook.send({
-                                            username: message.author,
-                                            avatarURL: message.authorAvatar,
-                                            files: [attachmentPath]
-                                        });
+                            if (message.attachments && message.attachments.length > 0) {
+                                for (const attachment of message.attachments) {
+                                    try {
+                                        if (attachment.localPath) {
+                                            // Try multiple possible paths for the attachment
+                                            const possiblePaths = [
+                                                path.join(path.dirname(req.file.path), attachment.localPath),
+                                                path.join(__dirname, 'backups', attachment.localPath),
+                                                path.join(__dirname, attachment.localPath),
+                                                attachment.localPath
+                                            ];
+
+                                            let foundPath = null;
+                                            for (const testPath of possiblePaths) {
+                                                if (fsSync.existsSync(testPath)) {
+                                                    foundPath = testPath;
+                                                    break;
+                                                }
+                                            }
+
+                                            if (foundPath) {
+                                                await webhook.send({
+                                                    username: messageOptions.username,
+                                                    avatarURL: messageOptions.avatarURL,
+                                                    files: [foundPath]
+                                                });
+                                            } else {
+                                                // If local file not found, try to use the URL
+                                                if (attachment.url) {
+                                                    await webhook.send({
+                                                        username: messageOptions.username,
+                                                        avatarURL: messageOptions.avatarURL,
+                                                        content: attachment.url
+                                                    });
+                                                } else {
+                                                    throw new Error('Attachment not found');
+                                                }
+                                            }
+                                        } else if (attachment.url) {
+                                            await webhook.send({
+                                                username: messageOptions.username,
+                                                avatarURL: messageOptions.avatarURL,
+                                                content: attachment.url
+                                            });
+                                        }
+                                    } catch (error) {
+                                        res.write(JSON.stringify({ status: `Error restoring attachment in ${channelData.name}: ${error.message}` }) + '\n');
                                     }
-                                } else if (attachment.url) {
-                                    await webhook.send({
-                                        username: message.author,
-                                        avatarURL: message.authorAvatar,
-                                        content: attachment.url
-                                    });
+                                    await delay(1000); // Rate limit delay between attachments
                                 }
                             }
                         } catch (error) {
                             res.write(JSON.stringify({ status: `Error restoring message in ${channelData.name}: ${error.message}` }) + '\n');
                         }
-                        await delay(1000); // Rate limit delay
+                        await delay(1000); // Rate limit delay between messages
                     }
 
                     // Clean up webhook
