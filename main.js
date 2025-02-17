@@ -411,14 +411,18 @@ async function backupDMChannel(channel) {
         const messageData = {
           author: msg.author.username,
           content: msg.content,
-          authorAvatar: msg.author.avatar || client.user.displayAvatarURL({ format: 'png', dynamic: true }),
+          authorAvatar: msg.author.avatar 
+            ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png`
+            : 'https://cdn.discordapp.com/embed/avatars/0.png',
           attachments: [],
           timestamp: msg.createdTimestamp,
           isGroupDM: isGroupDM,
           recipients: isGroupDM ? channel.recipients.map(r => ({
             id: r.id,
             username: r.username,
-            avatar: r.avatar ? `https://cdn.discordapp.com/avatars/${r.id}/${r.avatar}.png` : null
+            avatar: r.avatar 
+              ? `https://cdn.discordapp.com/avatars/${r.id}/${r.avatar}.png`
+              : 'https://cdn.discordapp.com/embed/avatars/0.png'
           })) : null
         };
 
@@ -1032,8 +1036,8 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                 return new Promise(async (resolve) => {
                     try {
                         const messageOptions = {
-                            username: message.author,
-                            avatarURL: message.authorAvatar || client.user.displayAvatarURL({ format: 'png' }),
+                            username: message.author.username,
+                            avatarURL: message.author.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png',
                             content: message.content
                         };
 

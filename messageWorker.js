@@ -30,7 +30,10 @@ async function fetchMessages(data) {
                 content: msg.content,
                 author: {
                     username: msg.author.username,
-                    avatar: msg.author.avatar ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png` : null
+                    id: msg.author.id,
+                    avatar: msg.author.avatar 
+                        ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png` 
+                        : 'https://cdn.discordapp.com/embed/avatars/0.png'
                 },
                 attachments: Array.from(msg.attachments.values()),
                 createdTimestamp: msg.createdTimestamp
@@ -71,8 +74,8 @@ async function processMessageBatch(data) {
         for (const message of messages) {
             try {
                 const messageOptions = {
-                    username: message.author,
-                    avatarURL: message.authorAvatar,
+                    username: message.author.username,
+                    avatarURL: message.author.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png',
                     content: message.content
                 };
 
