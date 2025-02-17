@@ -30,7 +30,7 @@ async function fetchMessages(data) {
                 content: msg.content,
                 author: {
                     username: msg.author.username,
-                    avatar: msg.author.avatar
+                    avatar: msg.author.avatar ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png` : null
                 },
                 attachments: Array.from(msg.attachments.values()),
                 createdTimestamp: msg.createdTimestamp

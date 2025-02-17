@@ -411,18 +411,14 @@ async function backupDMChannel(channel) {
         const messageData = {
           author: msg.author.username,
           content: msg.content,
-          authorAvatar: typeof msg.author.displayAvatarURL === 'function' 
-            ? msg.author.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 })
-            : msg.author.avatar || null,
+          authorAvatar: msg.author.avatar || client.user.displayAvatarURL({ format: 'png', dynamic: true }),
           attachments: [],
           timestamp: msg.createdTimestamp,
           isGroupDM: isGroupDM,
           recipients: isGroupDM ? channel.recipients.map(r => ({
             id: r.id,
             username: r.username,
-            avatar: typeof r.displayAvatarURL === 'function'
-              ? r.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 })
-              : r.avatar || null
+            avatar: r.avatar ? `https://cdn.discordapp.com/avatars/${r.id}/${r.avatar}.png` : null
           })) : null
         };
 
@@ -1037,14 +1033,14 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                     try {
                         const messageOptions = {
                             username: message.author,
-                            avatarURL: message.authorAvatar || client.user.displayAvatarURL()
+                            avatarURL: message.authorAvatar || client.user.displayAvatarURL({ format: 'png' }),
+                            content: message.content
                         };
 
                         // Handle text content
                         if (message.content?.trim()) {
                             if (channel.type === 'GUILD_TEXT') {
                                 await webhook.send({
-                                    content: message.content,
                                     ...messageOptions
                                 });
                             } else {

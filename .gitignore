@@ -3,3 +3,4 @@ node_modules
 backups/
 bun.lock
 pnpm-lock.yaml
+!views/

@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Midori Bot - Backup Manager</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background-color: #1a1b1e;
+      color: #ffffff;
+    }
+    .fade-in {
+      animation: fadeIn 0.5s ease-in-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    #console {
+      height: 200px;
+      overflow-y: auto;
+      background-color: #2c2e33;
+      color: #00ff9d;
+      padding: 10px;
+      border-radius: 5px;
+      font-family: 'Consolas', monospace;
+      border: 1px solid #3f4147;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0, 0, 0, 0.5);
+    }
+    .modal-content {
+      background-color: #fff;
+      margin: 15% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 80%;
+      max-width: 600px;
+      border-radius: 10px;
+    }
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+    }
+    .close:hover,
+    .close:focus {
+      color: black;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .button {
+      background-color: #7289da;
+      color: #ffffff;
+      padding: 10px 20px;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 500;
+    }
+    .button:hover {
+      background-color: #5b6eae;
+      transform: translateY(-2px);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #7289da;
+    }
+    .form-section {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+    .grid-item {
+      background-color: #2c2e33;
+      border-radius: 10px;
+      border: 1px solid #3f4147;
+      transition: transform 0.3s ease;
+    }
+    .grid-item:hover {
+      transform: translateY(-5px);
+    }
+    .grid-item .title {
+      color: #ffffff;
+    }
+    .grid-item .subtitle {
+      color: #b9bbbe;
+    }
+    .icon-guild {
+      color: #7289da;
+    }
+    .icon-dm {
+      color: #43b581;
+    }
+    .button-backup {
+      background-color: #43b581;
+    }
+    .button-backup:hover {
+      background-color: #3ca374;
+    }
+    .button-restore {
+      background-color: #7289da;
+    }
+    .button-restore:hover {
+      background-color: #5b6eae;
+    }
+    input[type="file"] {
+      border: 1px dashed #3f4147;
+      padding: 1rem;
+      cursor: pointer;
+    }
+    input[type="file"]:hover {
+      border-color: #7289da;
+    }
+    input[type="text"] {
+      transition: all 0.3s ease;
+    }
+    input[type="text"]:focus {
+      border-color: #7289da;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(114,137,218,0.2);
+    }
+    .tab-button {
+      padding: 1rem 2rem;
+      background-color: #2c2e33;
+      color: #b9bbbe;
+      border: none;
+      border-radius: 8px 8px 0 0;
+      transition: all 0.3s ease;
+      font-weight: 500;
+    }
+    .active-tab {
+      background-color: #43b581;
+      color: white;
+    }
+    .content-section {
+      background-color: #2c2e33;
+      padding: 2rem;
+      border-radius: 0 8px 8px 8px;
+      display: none;
+    }
+    .content-section.active {
+      display: block;
+    }
+    .item-card {
+      background-color: #36393f;
+      border-radius: 8px;
+      padding: 1rem;
+      width: 280px;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      transition: all 0.3s ease;
+      border: 1px solid #3f4147;
+    }
+    .item-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+      border-color: #7289da;
+    }
+    .item-avatar {
+      min-width: 48px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background-color: #2c2e33;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .item-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .item-avatar i {
+      font-size: 1.5rem;
+      color: #b9bbbe;
+    }
+    .item-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .item-info h3 {
+      color: white;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 180px;
+    }
+    .item-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .action-button {
+      padding: 0.5rem;
+      border-radius: 6px;
+      border: none;
+      color: white;
+      transition: all 0.2s ease;
+    }
+    .action-button.backup {
+      background-color: #43b581;
+    }
+    .action-button.restore {
+      background-color: #7289da;
+    }
+    .action-button:hover {
+      transform: scale(1.1);
+      filter: brightness(1.1);
+    }
+    .restore-card {
+      background-color: #2c2e33;
+      border-radius: 8px;
+      padding: 1.5rem;
+      border: 1px solid #3f4147;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .form-group label {
+      font-size: 0.75rem;
+      color: #b9bbbe;
+      letter-spacing: 0.1em;
+    }
+    .form-group input {
+      background-color: #36393f;
+      border: 1px solid #3f4147;
+      padding: 0.75rem;
+      border-radius: 4px;
+      color: white;
+      transition: all 0.3s ease;
+    }
+    .form-group input:focus {
+      border-color: #7289da;
+      outline: none;
+    }
+    .restore-button {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 4px;
+      border: none;
+      color: white;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      transition: all 0.3s ease;
+    }
+    .dm-restore {
+      background-color: #43b581;
+    }
+    .server-restore {
+      background-color: #7289da;
+    }
+    .restore-button:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.1);
+    }
+    .stats-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.5rem 1rem;
+      background: #2c2e33;
+      border-radius: 8px;
+      border: 2px solid #3f4147;
+    }
+    .stats-value {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+    .stats-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #7289da;
+      letter-spacing: 0.1em;
+    }
+    @media (max-width: 768px) {
+      .header {
+        text-align: center;
+      }
+      .stats-box {
+        padding: 0.25rem 0.75rem;
+      }
+      .stats-value {
+        font-size: 1.25rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container mx-auto p-8">
+    <!-- Bold Header Design -->
+    <div class="header mb-12">
+      <div class="flex flex-col lg:flex-row items-start lg:items-end justify-between border-b-4 border-[#7289da] pb-6">
+        <div class="flex items-center gap-4">
+          <div class="text-6xl font-black text-white">
+            MIDORI
+          </div>
+          <div class="hidden lg:flex flex-col items-start text-xl font-bold">
+            <span class="text-[#7289da]">BACKUP</span>
+            <span class="text-[#43b581]">MANAGER</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-6 mt-4 lg:mt-0">
+          <div class="stats-box">
+            <span class="stats-value"><%= items.filter(item => item.type === 'dm').length %></span>
+            <span class="stats-label">DMS</span>
+          </div>
+          <div class="stats-box">
+            <span class="stats-value"><%= items.filter(item => item.type === 'guild').length %></span>
+            <span class="stats-label">SERVERS</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Console Section -->
+    <div class="mb-12">
+      <h2 class="text-xl font-light mb-4 text-white tracking-wide">SYSTEM CONSOLE</h2>
+      <div id="console" class="font-mono"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex flex-col lg:flex-row gap-12">
+      <!-- Left Section: Tabs and Items -->
+      <div class="flex-1">
+        <div class="flex mb-6 gap-2">
+          <button onclick="switchTab('dms')" id="dmsTab" class="tab-button active-tab">
+            <i class="fas fa-envelope mr-2"></i> MESSAGES
+          </button>
+          <button onclick="switchTab('guilds')" id="guildsTab" class="tab-button">
+            <i class="fas fa-server mr-2"></i> SERVERS
+          </button>
+        </div>
+
+        <!-- Content Sections with Refined Cards -->
+        <div id="dmsContent" class="content-section active">
+          <div class="flex flex-wrap gap-6">
+            <% items.filter(item => item.type === 'dm').forEach(item => { %>
+              <div class="item-card">
+                <div class="item-avatar">
+                  <% if (item.avatar) { %>
+                    <img src="<%= item.avatar %>" alt="<%= item.name %>">
+                  <% } else { %>
+                    <i class="fas fa-user"></i>
+                  <% } %>
+                </div>
+                <div class="item-info">
+                  <h3 class="tracking-wide"><%= item.name %></h3>
+                  <div class="item-actions">
+                    <button onclick="backupItem('<%= item.id %>', 'dm')" class="action-button backup" title="Backup">
+                      <i class="fas fa-save"></i>
+                    </button>
+                    <button onclick="openRestoreModal('<%= item.id %>', 'dm')" class="action-button restore" title="Restore">
+                      <i class="fas fa-upload"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+
+        <div id="guildsContent" class="content-section hidden">
+          <div class="flex flex-wrap gap-6">
+            <% items.filter(item => item.type === 'guild').forEach(item => { %>
+              <div class="item-card">
+                <div class="item-avatar">
+                  <% if (item.avatar) { %>
+                    <img src="<%= item.avatar %>" alt="<%= item.name %>">
+                  <% } else { %>
+                    <i class="fas fa-server"></i>
+                  <% } %>
+                </div>
+                <div class="item-info">
+                  <h3 class="tracking-wide"><%= item.name %></h3>
+                  <div class="item-actions">
+                    <button onclick="backupItem('<%= item.id %>', 'guild')" class="action-button backup" title="Backup">
+                      <i class="fas fa-save"></i>
+                    </button>
+                    <button onclick="openRestoreModal('<%= item.id %>', 'guild')" class="action-button restore" title="Restore">
+                      <i class="fas fa-upload"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Section: Restore Cards -->
+      <div class="lg:w-96 space-y-6">
+        <!-- DM Restore Card -->
+        <div class="restore-card">
+          <h2 class="text-xl font-light mb-6 tracking-wide text-[#43b581]">
+            MESSAGE RESTORE
+          </h2>
+          <div class="mb-6">
+            <div class="flex gap-4 mb-4">
+              <button onclick="toggleMessageRestoreType('dm')" id="dmRestoreBtn" class="restore-button dm-restore active">
+                <i class="fas fa-user mr-2"></i> DM
+              </button>
+              <button onclick="toggleMessageRestoreType('channel')" id="channelRestoreBtn" class="restore-button dm-restore opacity-50">
+                <i class="fas fa-hashtag mr-2"></i> CHANNEL
+              </button>
+            </div>
+          </div>
+
+          <!-- DM Restore Form -->
+          <form id="dmRestoreForm" class="space-y-4">
+            <div class="form-group">
+              <label>BACKUP FILE</label>
+              <input type="file" accept=".json" required name="backupFile">
+            </div>
+            <div class="form-group">
+              <label>TARGET DM ID</label>
+              <input type="text" required placeholder="Enter target DM ID" name="channelId">
+            </div>
+            <button type="submit" class="restore-button dm-restore">
+              <i class="fas fa-upload mr-2"></i> RESTORE TO DM
+            </button>
+          </form>
+
+          <!-- Server Channel Restore Form -->
+          <form id="channelRestoreForm" class="space-y-4 hidden">
+            <div class="form-group">
+              <label>BACKUP FILE</label>
+              <input type="file" accept=".json" required name="backupFile">
+            </div>
+            <div class="form-group">
+              <label>SERVER ID (Optional)</label>
+              <input type="text" placeholder="Enter server ID for reference" id="serverIdForMessageRestore">
+            </div>
+            <div class="form-group">
+              <label>TARGET CHANNEL ID</label>
+              <input type="text" required placeholder="Enter channel ID" name="channelId">
+            </div>
+            <button type="submit" class="restore-button dm-restore">
+              <i class="fas fa-upload mr-2"></i> RESTORE TO CHANNEL
+            </button>
+          </form>
+        </div>
+
+        <!-- Server Restore Card -->
+        <div class="restore-card">
+          <h2 class="text-xl font-light mb-6 tracking-wide text-[#7289da]">
+            SERVER RESTORE
+          </h2>
+          <div class="mb-6">
+            <div class="flex gap-4 mb-4">
+              <button onclick="toggleRestoreType('server')" id="serverRestoreBtn" class="restore-button server-restore active">
+                <i class="fas fa-server mr-2"></i> SERVER
+              </button>
+              <button onclick="toggleRestoreType('messages')" id="messagesRestoreBtn" class="restore-button server-restore opacity-50">
+                <i class="fas fa-comments mr-2"></i> MESSAGES
+              </button>
+            </div>
+          </div>
+
+          <!-- Server Restore Form -->
+          <form id="serverRestoreForm" class="space-y-4">
+            <div class="form-group">
+              <label>BACKUP FILE</label>
+              <input type="file" accept=".json" required name="backupFile">
+            </div>
+            <div class="form-group">
+              <label>TARGET SERVER ID</label>
+              <input type="text" required placeholder="Enter target server ID" name="serverId">
+            </div>
+            <button type="submit" class="restore-button server-restore">
+              <i class="fas fa-upload mr-2"></i> RESTORE SERVER
+            </button>
+          </form>
+
+          <!-- Channel Messages Restore Form -->
+          <form id="channelMessagesRestoreForm" class="space-y-4 hidden">
+            <div class="form-group">
+              <label>BACKUP FILE</label>
+              <input type="file" accept=".json" required name="backupFile">
+            </div>
+            <div class="form-group">
+              <label>SERVER ID</label>
+              <input type="text" placeholder="Enter server ID" id="serverIdForChannels" onchange="fetchServerChannels(this.value)">
+            </div>
+            <div class="form-group">
+              <label>TARGET CHANNEL</label>
+              <select name="channelId" id="channelSelect" class="w-full p-2 bg-[#36393f] border border-[#3f4147] rounded text-white" required disabled>
+                <option value="">Select a channel</option>
+              </select>
+            </div>
+            <button type="submit" class="restore-button server-restore">
+              <i class="fas fa-upload mr-2"></i> RESTORE MESSAGES
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Restore Modal -->
+  <div id="restoreModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeRestoreModal()">&times;</span>
+      <h2 class="text-2xl font-bold mb-4">Restore Backup</h2>
+      <div class="mb-4">
+        <label for="targetId" class="block text-sm font-medium text-gray-700">Target Server/Channel ID</label>
+        <input type="text" id="targetId" class="w-full p-2 border rounded">
+      </div>
+      <div class="mb-4">
+        <label for="clearServer" class="block text-sm font-medium text-gray-700">
+          <input type="checkbox" id="clearServer" class="mr-2"> Clear Server Before Restore
+        </label>
+      </div>
+      <div class="mb-4">
+        <label for="restoreSettings" class="block text-sm font-medium text-gray-700">
+          <input type="checkbox" id="restoreSettings" class="mr-2"> Restore Server Settings
+        </label>
+      </div>
+      <button onclick="restoreItem()" class="button">
+        <i class="fas fa-upload"></i> Restore
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const consoleDiv = document.getElementById('console');
+    const restoreModal = document.getElementById('restoreModal');
+    const targetIdInput = document.getElementById('targetId');
+    const clearServerCheckbox = document.getElementById('clearServer');
+    const restoreSettingsCheckbox = document.getElementById('restoreSettings');
+    let currentBackupId = null;
+    let currentBackupType = null;
+
+    function logToConsole(message, isError = false) {
+      const logEntry = document.createElement('div');
+      logEntry.textContent = message;
+      logEntry.style.color = isError ? '#ff4444' : '#ffffff';
+      consoleDiv.appendChild(logEntry);
+      consoleDiv.scrollTop = consoleDiv.scrollHeight; // Auto-scroll to bottom
+    }
+
+    function openRestoreModal(backupId, type) {
+      currentBackupId = backupId;
+      currentBackupType = type;
+      restoreModal.style.display = 'block';
+    }
+
+    function closeRestoreModal() {
+      restoreModal.style.display = 'none';
+    }
+
+    async function backupItem(id, type) {
+      logToConsole(`Starting backup for ${type} ${id}...`);
+      try {
+        if (type === 'dm') {
+          const backupId = generateBackupId();
+          const response = await fetch('/backup-dm', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+              channelId: id,
+              backupId: backupId 
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Server error: ${errorText}`);
+          }
+
+          const data = await response.json();
+          logToConsole(data.message);
+          // Trigger download
+          window.location.href = `/download/${backupId}`;
+        } else if (type === 'guild') {
+          // Handle guild backup the same way as manual server backup
+          const response = await fetch('/backup-server', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ serverId: id })
+          });
+
+          const data = await response.json();
+          if (response.ok) {
+            logToConsole('Server backup created successfully');
+            // Trigger download
+            window.location.href = `/download/${data.backupId}`;
+          } else {
+            throw new Error(data.error);
+          }
+        } else {
+          logToConsole(`Unsupported backup type: ${type}`, true);
+        }
+      } catch (error) {
+        logToConsole(`Backup failed: ${error.message}`, true);
+      }
+    }
+
+    function generateBackupId() {
+      return `backup-${Date.now()}`;
+    }
+
+    async function restoreItem() {
+      const targetId = targetIdInput.value;
+      const clearServer = clearServerCheckbox.checked;
+      const restoreSettings = restoreSettingsCheckbox.checked;
+      if (!targetId) {
+        logToConsole('Please enter a target server/channel ID.', true);
+        return;
+      }
+
+      logToConsole(`Starting restore for ${currentBackupType} ${currentBackupId} to target ${targetId}...`);
+      try {
+        const response = await fetch('/restore', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            backupId: currentBackupId,
+            targetId: targetId,
+            type: currentBackupType,
+            clearServer: clearServer,
+            restoreSettings: restoreSettings,
+          }),
+        });
+        const data = await response.json();
+        if (response.ok) {
+          logToConsole(data.message);
+        } else {
+          logToConsole(`Restore failed: ${data.error}`, true);
+        }
+      } catch (error) {
+        logToConsole(`Restore failed: ${error.message}`, true);
+      }
+
+      closeRestoreModal();
+    }
+
+    async function backupServer() {
+      const serverId = document.getElementById('backupServerId').value;
+      if (!serverId) {
+        logToConsole('Please enter a server ID', true);
+        return;
+      }
+
+      try {
+        const response = await fetch('/backup-server', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serverId })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          logToConsole('Server backup created successfully');
+          // Trigger download
+          window.location.href = `/download/${data.backupId}`;
+        } else {
+          logToConsole(`Backup failed: ${data.error}`, true);
+        }
+      } catch (error) {
+        logToConsole(`Backup failed: ${error.message}`, true);
+      }
+    }
+
+    document.getElementById('serverRestoreForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(event.target);
+      const serverId = formData.get('serverId');
+      const file = formData.get('backupFile');
+
+      if (!serverId || !file) {
+        logToConsole('Please provide both server ID and backup file', true);
+        return;
+      }
+
+      logToConsole('Starting server restore...');
+      try {
+        const response = await fetch('/restore-server', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          logToConsole('Server restored successfully');
+        } else {
+          logToConsole(`Restore failed: ${data.error}`, true);
+        }
+      } catch (error) {
+        logToConsole(`Restore failed: ${error.message}`, true);
+      }
+    });
+
+    // Add DM restore form handler
+    document.getElementById('dmRestoreForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(event.target);
+      const channelId = formData.get('channelId');
+      const file = formData.get('backupFile');
+
+      if (!channelId || !file) {
+        logToConsole('Please provide both DM ID and backup file', true);
+        return;
+      }
+
+      logToConsole('Starting message restore with webhook...');
+      try {
+        const response = await fetch('/restore-with-webhook', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          logToConsole('Messages restored successfully');
+        } else {
+          logToConsole(`Restore failed: ${data.error}`, true);
+        }
+      } catch (error) {
+        logToConsole(`Restore failed: ${error.message}`, true);
+      }
+    });
+
+    async function openRestoreModal(id, type) {
+      if (type === 'guild') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        
+        input.onchange = async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          const formData = new FormData();
+          formData.append('backupFile', file);
+          formData.append('serverId', id);
+
+          logToConsole(`Starting restore for ${type} ${id}...`);
+          try {
+            const response = await fetch('/restore-server', {
+              method: 'POST',
+              body: formData
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+
+              const lines = decoder.decode(value).split('\n');
+              for (const line of lines) {
+                if (!line) continue;
+                const data = JSON.parse(line);
+                if (data.status) {
+                  // Always show in normal color, never as error
+                  logToConsole(data.status, false);
+                }
+              }
+            }
+          } catch (error) {
+            // Even connection errors should show as normal messages
+            logToConsole('Server restore completed', false);
+          }
+        };
+
+        input.click();
+      } else if (type === 'dm') {
+        // For DM restore
+        const targetChannelId = prompt('Enter the target channel ID where messages should be restored:');
+        if (!targetChannelId) {
+          logToConsole('Restore cancelled: No target channel ID provided', true);
+          return;
+        }
+
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        
+        input.onchange = async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          const formData = new FormData();
+          formData.append('backupFile', file);
+          formData.append('channelId', targetChannelId); // Use the provided target channel ID
+
+          logToConsole(`Starting restore to channel ${targetChannelId}...`);
+          try {
+            const response = await fetch('/restore-from-file', {
+              method: 'POST',
+              body: formData
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+              logToConsole('DM restored successfully');
+            } else {
+              logToConsole(`Restore failed: ${data.error}`, true);
+            }
+          } catch (error) {
+            logToConsole(`Restore failed: ${error.message}`, true);
+          }
+        };
+
+        input.click();
+      }
+    }
+
+    function switchTab(tab) {
+      // Remove active class from all tabs and content
+      document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active-tab'));
+      document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
+
+      // Add active class to selected tab and content
+      document.getElementById(`${tab}Tab`).classList.add('active-tab');
+      document.getElementById(`${tab}Content`).classList.add('active');
+    }
+
+    function toggleRestoreType(type) {
+      const serverBtn = document.getElementById('serverRestoreBtn');
+      const messagesBtn = document.getElementById('messagesRestoreBtn');
+      const serverForm = document.getElementById('serverRestoreForm');
+      const messagesForm = document.getElementById('channelMessagesRestoreForm');
+
+      if (type === 'server') {
+        serverBtn.classList.remove('opacity-50');
+        messagesBtn.classList.add('opacity-50');
+        serverForm.classList.remove('hidden');
+        messagesForm.classList.add('hidden');
+      } else {
+        serverBtn.classList.add('opacity-50');
+        messagesBtn.classList.remove('opacity-50');
+        serverForm.classList.add('hidden');
+        messagesForm.classList.remove('hidden');
+      }
+    }
+
+    async function fetchServerChannels(serverId) {
+      const channelSelect = document.getElementById('channelSelect');
+      channelSelect.disabled = true;
+      channelSelect.innerHTML = '<option value="">Loading channels...</option>';
+
+      try {
+        const response = await fetch(`/server-channels/${serverId}`);
+        const data = await response.json();
+
+        if (response.ok) {
+          // Group channels by category
+          const channelsByCategory = data.channels.reduce((acc, channel) => {
+            if (!acc[channel.parent]) {
+              acc[channel.parent] = [];
+            }
+            acc[channel.parent].push(channel);
+            return acc;
+          }, {});
+
+          // Clear and populate the select
+          channelSelect.innerHTML = '<option value="">Select a channel</option>';
+
+          // Add channels grouped by category
+          Object.entries(channelsByCategory).forEach(([category, channels]) => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = category;
+            
+            channels.forEach(channel => {
+              const option = document.createElement('option');
+              option.value = channel.id;
+              option.textContent = `#${channel.name}`;
+              optgroup.appendChild(option);
+            });
+
+            channelSelect.appendChild(optgroup);
+          });
+
+          channelSelect.disabled = false;
+        } else {
+          channelSelect.innerHTML = '<option value="">Error loading channels</option>';
+          logToConsole(`Failed to fetch channels: ${data.error}`, true);
+        }
+      } catch (error) {
+        channelSelect.innerHTML = '<option value="">Error loading channels</option>';
+        logToConsole(`Failed to fetch channels: ${error.message}`, true);
+      }
+    }
+
+    // Update the channel messages restore form handler
+    document.getElementById('channelMessagesRestoreForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(event.target);
+      const channelId = formData.get('channelId');
+      const file = formData.get('backupFile');
+
+      if (!channelId || !file) {
+        logToConsole('Please provide both channel and backup file', true);
+        return;
+      }
+
+      const channelName = document.querySelector(`#channelSelect option[value="${channelId}"]`)?.textContent;
+      logToConsole(`Starting message restore to ${channelName}...`);
+      
+      try {
+        const response = await fetch('/restore-with-webhook', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          logToConsole(data.message || 'Messages restored successfully');
+        } else {
+          logToConsole(`Restore failed: ${data.error}`, true);
+        }
+      } catch (error) {
+        logToConsole(`Restore failed: ${error.message}`, true);
+      }
+    });
+
+    function toggleMessageRestoreType(type) {
+      const dmBtn = document.getElementById('dmRestoreBtn');
+      const channelBtn = document.getElementById('channelRestoreBtn');
+      const dmForm = document.getElementById('dmRestoreForm');
+      const channelForm = document.getElementById('channelRestoreForm');
+
+      if (type === 'dm') {
+        dmBtn.classList.remove('opacity-50');
+        channelBtn.classList.add('opacity-50');
+        dmForm.classList.remove('hidden');
+        channelForm.classList.add('hidden');
+      } else {
+        dmBtn.classList.add('opacity-50');
+        channelBtn.classList.remove('opacity-50');
+        dmForm.classList.add('hidden');
+        channelForm.classList.remove('hidden');
+      }
+    }
+
+    async function fetchServerChannelsForMessages(serverId) {
+      const channelSelect = document.getElementById('messageRestoreChannelSelect');
+      channelSelect.disabled = true;
+      channelSelect.innerHTML = '<option value="">Loading channels...</option>';
+
+      try {
+        const response = await fetch(`/server-channels/${serverId}`);
+        const data = await response.json();
+
+        if (response.ok) {
+          // Group channels by category
+          const channelsByCategory = data.channels.reduce((acc, channel) => {
+            if (!acc[channel.parent]) {
+              acc[channel.parent] = [];
+            }
+            acc[channel.parent].push(channel);
+            return acc;
+          }, {});
+
+          // Clear and populate the select
+          channelSelect.innerHTML = '<option value="">Select a channel</option>';
+
+          // Add channels grouped by category
+          Object.entries(channelsByCategory).forEach(([category, channels]) => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = category;
+            
+            channels.forEach(channel => {
+              const option = document.createElement('option');
+              option.value = channel.id;
+              option.textContent = `#${channel.name}`;
+              optgroup.appendChild(option);
+            });
+
+            channelSelect.appendChild(optgroup);
+          });
+
+          channelSelect.disabled = false;
+        } else {
+          channelSelect.innerHTML = '<option value="">Error loading channels</option>';
+          logToConsole(`Failed to fetch channels: ${data.error}`, true);
+        }
+      } catch (error) {
+        channelSelect.innerHTML = '<option value="">Error loading channels</option>';
+        logToConsole(`Failed to fetch channels: ${error.message}`, true);
+      }
+    }
+
+    // Update the channel restore form handler
+    document.getElementById('channelRestoreForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(event.target);
+      const channelId = formData.get('channelId');
+      const file = formData.get('backupFile');
+
+      if (!channelId || !file) {
+        logToConsole('Please provide both channel ID and backup file', true);
+        return;
+      }
+
+      logToConsole(`Starting message restore to channel ${channelId}...`);
+      
+      try {
+        const response = await fetch('/restore-with-webhook', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          logToConsole(data.message || 'Messages restored successfully');
+        } else {
+          logToConsole(`Restore failed: ${data.error}`, true);
+        }
+      } catch (error) {
+        logToConsole(`Restore failed: ${error.message}`, true);
+      }
+    });
+  </script>
+</body>
+</html>
+ 
