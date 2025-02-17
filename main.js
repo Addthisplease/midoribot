@@ -5,6 +5,7 @@ const fsSync = require('fs');
 const path = require('path');
 const express = require('express');
 const app = express();
+const os = require('os');
 const port = 8321;
 const fetch = require('node-fetch');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
@@ -1583,30 +1584,18 @@ async function fetchMessagesWithRetry(channel, options, retries = MAX_RETRY_ATTE
 
 // Helper function to clean filename and get extension
 function getCleanFilenameAndExt(url, originalFilename) {
-    let ext = '';
+    // Remove query parameters from URL
+    const cleanUrl = url.split('?')[0];
     
-    // First try to get extension from original filename
-    if (originalFilename) {
-        // Remove any query parameters from the original filename
-        const cleanFilename = originalFilename.split('?')[0];
-        ext = path.extname(cleanFilename);
-    }
+    // Get base filename without query parameters
+    let filename = path.basename(cleanUrl);
     
-    // If no extension from filename, try to get it from URL
-    if (!ext) {
-        // Remove query parameters from URL
-        const cleanUrl = url.split('?')[0];
-        ext = path.extname(cleanUrl);
-    }
-    
-    // If still no extension, use .unknown
-    if (!ext) {
-        ext = '.unknown';
-    }
-    
-    // Generate clean filename
+    // Generate a unique filename with timestamp
     const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substr(2, 9);
+    const randomString = Math.random().toString(36).substring(2, 8);
+    const ext = path.extname(filename) || '.unknown';
+    
+    // Create clean filename without query parameters
     const cleanFilename = `${timestamp}-${randomString}${ext}`;
     
     return cleanFilename;
@@ -1615,21 +1604,20 @@ function getCleanFilenameAndExt(url, originalFilename) {
 // Helper function to download attachments
 async function downloadAttachment(url, savePath, originalFilename) {
     try {
-        // Remove any query parameters from the URL
+        // Remove any query parameters from the URL and path
         const cleanUrl = url.split('?')[0];
-        const response = await fetch(url);
+        const cleanSavePath = savePath.split('?')[0];
+        
+        const response = await fetch(cleanUrl);
         if (!response.ok) {
             throw new Error(`Failed to download attachment: ${response.statusText}`);
         }
-
-        // Get the clean filename without query parameters
-        const cleanSavePath = savePath.split('?')[0];
 
         // Ensure the directory exists
         const dir = path.dirname(cleanSavePath);
         await fs.mkdir(dir, { recursive: true });
 
-        // Stream the file instead of loading it into memory
+        // Stream the file
         const fileStream = fsSync.createWriteStream(cleanSavePath);
         await streamPipeline(response.body, fileStream);
 
@@ -1637,7 +1625,6 @@ async function downloadAttachment(url, savePath, originalFilename) {
         return true;
     } catch (error) {
         console.error(chalk.red(`Error downloading attachment: ${error.message}`));
-        // Try to clean up the failed download
         try {
             if (fsSync.existsSync(savePath)) {
                 await fs.unlink(savePath);
