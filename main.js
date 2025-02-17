@@ -413,9 +413,9 @@ async function backupDMChannel(channel) {
           content: msg.content,
           webhookData: {
             username: msg.author.username,
-            avatarURL: msg.author.avatar 
-              ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png`
-              : 'https://cdn.discordapp.com/embed/avatars/0.png'
+            avatarURL: msg.author.avatar ? 
+                `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
+                `https://cdn.discordapp.com/embed/avatars/${(parseInt(msg.author.id) >> 22) % 6}.png`
           },
           attachments: [],
           timestamp: msg.createdTimestamp,
@@ -423,9 +423,9 @@ async function backupDMChannel(channel) {
           recipients: isGroupDM ? channel.recipients.map(r => ({
             id: r.id,
             username: r.username,
-            avatar: r.avatar 
-              ? `https://cdn.discordapp.com/avatars/${r.id}/${r.avatar}.png`
-              : 'https://cdn.discordapp.com/embed/avatars/0.png'
+            avatar: r.avatar ? 
+                `https://cdn.discordapp.com/avatars/${r.id}/${r.avatar}` : 
+                `https://cdn.discordapp.com/embed/avatars/${(parseInt(r.id) >> 22) % 6}.png`
           })) : null
         };
 
@@ -1039,17 +1039,18 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                 return new Promise(async (resolve) => {
                     try {
                         const messageOptions = {
-                            username: message.webhookData?.username || message.author.username,
-                            avatarURL: message.webhookData?.avatarURL || message.author.avatar,
+                            username: message.webhookData?.username || message.author?.username || message.author,
+                            avatarURL: message.webhookData?.avatarURL || 
+                                (message.author?.id && message.author?.avatar ? 
+                                    `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}` : 
+                                    `https://cdn.discordapp.com/embed/avatars/${(parseInt(message.author?.id || '0') >> 22) % 6}.png`),
                             content: message.content
                         };
 
                         // Handle text content
                         if (message.content?.trim()) {
                             if (channel.type === 'GUILD_TEXT') {
-                                await webhook.send({
-                                    ...messageOptions
-                                });
+                                await webhook.send(messageOptions);
                             } else {
                                 await channel.send(message.content);
                             }
@@ -1092,8 +1093,8 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                                         const attachmentUrl = attachment.url || attachment.originalUrl;
                                         if (channel.type === 'GUILD_TEXT') {
                                             await webhook.send({
-                                                content: attachmentUrl,
-                                                ...messageOptions
+                                                ...messageOptions,
+                                                content: attachmentUrl
                                             });
                                         } else {
                                             await channel.send(attachmentUrl);
@@ -1441,8 +1442,11 @@ app.post('/restore-server', upload.single('backupFile'), async (req, res) => {
                     for (const message of channelData.messages) {
                         try {
                             const messageOptions = {
-                                username: message.webhookData?.username || message.author,
-                                avatarURL: message.webhookData?.avatarURL || message.authorAvatar,
+                                username: message.webhookData?.username || message.author?.username || message.author,
+                                avatarURL: message.webhookData?.avatarURL || 
+                                    (message.author?.id && message.author?.avatar ? 
+                                        `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}` : 
+                                        `https://cdn.discordapp.com/embed/avatars/${(parseInt(message.author?.id || '0') >> 22) % 6}.png`),
                                 content: message.content
                             };
 
@@ -1474,16 +1478,14 @@ app.post('/restore-server', upload.single('backupFile'), async (req, res) => {
 
                                             if (foundPath) {
                                                 await webhook.send({
-                                                    username: messageOptions.username,
-                                                    avatarURL: messageOptions.avatarURL,
+                                                    ...messageOptions,
                                                     files: [foundPath]
                                                 });
                                             } else {
                                                 // If local file not found, try to use the URL
                                                 if (attachment.url) {
                                                     await webhook.send({
-                                                        username: messageOptions.username,
-                                                        avatarURL: messageOptions.avatarURL,
+                                                        ...messageOptions,
                                                         content: attachment.url
                                                     });
                                                 } else {
@@ -1492,8 +1494,7 @@ app.post('/restore-server', upload.single('backupFile'), async (req, res) => {
                                             }
                                         } else if (attachment.url) {
                                             await webhook.send({
-                                                username: messageOptions.username,
-                                                avatarURL: messageOptions.avatarURL,
+                                                ...messageOptions,
                                                 content: attachment.url
                                             });
                                         }

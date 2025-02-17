@@ -31,14 +31,18 @@ async function fetchMessages(data) {
                 author: {
                     username: msg.author.username,
                     id: msg.author.id,
-                    avatar: msg.author.avatarURL({ format: 'png', dynamic: true, size: 1024 }) || 'https://cdn.discordapp.com/embed/avatars/0.png'
+                    avatar: msg.author.avatar ? 
+                        `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
+                        `https://cdn.discordapp.com/embed/avatars/${(parseInt(msg.author.id) >> 22) % 6}.png`
                 },
-                attachments: Array.from(msg.attachments.values()),
-                createdTimestamp: msg.createdTimestamp,
                 webhookData: {
                     username: msg.author.username,
-                    avatarURL: msg.author.avatarURL({ format: 'png', dynamic: true, size: 1024 }) || 'https://cdn.discordapp.com/embed/avatars/0.png'
-                }
+                    avatarURL: msg.author.avatar ? 
+                        `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
+                        `https://cdn.discordapp.com/embed/avatars/${(parseInt(msg.author.id) >> 22) % 6}.png`
+                },
+                attachments: Array.from(msg.attachments.values()),
+                createdTimestamp: msg.createdTimestamp
             })));
             lastId = fetchedMessages.last().id;
             
