@@ -411,9 +411,12 @@ async function backupDMChannel(channel) {
         const messageData = {
           author: msg.author.username,
           content: msg.content,
-          authorAvatar: msg.author.avatar 
-            ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png`
-            : 'https://cdn.discordapp.com/embed/avatars/0.png',
+          webhookData: {
+            username: msg.author.username,
+            avatarURL: msg.author.avatar 
+              ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png`
+              : 'https://cdn.discordapp.com/embed/avatars/0.png'
+          },
           attachments: [],
           timestamp: msg.createdTimestamp,
           isGroupDM: isGroupDM,
@@ -1013,8 +1016,8 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
         let webhook = null;
         if (channel.type === 'GUILD_TEXT') {
             try {
-                webhook = await channel.createWebhook('Message Restore', {
-                    avatar: client.user.displayAvatarURL()
+                webhook = await channel.createWebhook('Message Restore Bot', {
+                    avatar: client.user.displayAvatarURL({ format: 'png', dynamic: true })
                 });
                 console.log(chalk.green(`Created webhook in channel ${channel.name}`));
             } catch (error) {
@@ -1036,8 +1039,8 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                 return new Promise(async (resolve) => {
                     try {
                         const messageOptions = {
-                            username: message.author.username,
-                            avatarURL: message.author.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png',
+                            username: message.webhookData?.username || message.author.username,
+                            avatarURL: message.webhookData?.avatarURL || message.author.avatar,
                             content: message.content
                         };
 
@@ -1279,7 +1282,11 @@ async function backupServer(guild) {
                                     filename: att.name,
                                     size: att.size,
                                     contentType: att.contentType
-                                }))
+                                })),
+                                webhookData: {
+                                    username: message.author.username,
+                                    avatarURL: message.author.avatarURL({ format: 'png', dynamic: true, size: 1024 }) || 'https://cdn.discordapp.com/embed/avatars/0.png'
+                                }
                             };
                             channelData.messages.push(messageData);
                         }
@@ -1426,7 +1433,7 @@ app.post('/restore-server', upload.single('backupFile'), async (req, res) => {
 
                     // Create webhook for message restoration
                     const webhook = await channel.createWebhook('Restore Bot', {
-                        avatar: client.user.displayAvatarURL()
+                        avatar: client.user.displayAvatarURL({ format: 'png', dynamic: true })
                     });
 
                     // Restore messages with attachments
