@@ -1,0 +1,898 @@
+{
+  "name": "Code-Cove",
+  "icon": "https://cdn.discordapp.com/icons/1191380825980293220/70d8821dcb9fa6554470ee799df8ebda.webp",
+  "roles": [
+    {
+      "name": "new role",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "562949953421312",
+      "mentionable": false,
+      "position": 6
+    },
+    {
+      "name": "carl-bot",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "2088234230",
+      "mentionable": false,
+      "position": 2
+    },
+    {
+      "name": "1️⃣0️⃣••LEVEL-10",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 25
+    },
+    {
+      "name": "🤝••PARTNERS••",
+      "color": "#000000",
+      "hoist": true,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 43
+    },
+    {
+      "name": "goofy",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 1
+    },
+    {
+      "name": "skid",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 11
+    },
+    {
+      "name": "Client",
+      "color": "#e74c3c",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 20
+    },
+    {
+      "name": "new role",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "562949953421312",
+      "mentionable": false,
+      "position": 7
+    },
+    {
+      "name": "👤••MEMBERS",
+      "color": "#000000",
+      "hoist": true,
+      "permissions": "31858024107585",
+      "mentionable": false,
+      "position": 42
+    },
+    {
+      "name": "🟡••YELLOW••",
+      "color": "#e4b400",
+      "hoist": false,
+      "permissions": "533235326373441",
+      "mentionable": false,
+      "position": 37
+    },
+    {
+      "name": "Muted",
+      "color": "#818386",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 14
+    },
+    {
+      "name": "🔵••BLUE••",
+      "color": "#2a51ff",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 38
+    },
+    {
+      "name": "1️⃣0️⃣0️⃣••LEVEL-100",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 22
+    },
+    {
+      "name": "⛳••ACTIVE••",
+      "color": "#000000",
+      "hoist": true,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 46
+    },
+    {
+      "name": "🏤••EUROPE••",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "533235326373441",
+      "mentionable": false,
+      "position": 32
+    },
+    {
+      "name": "✅••VERIFIED••",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "14265838063169",
+      "mentionable": false,
+      "position": 19
+    },
+    {
+      "name": "•-••-••-••-•LEVELS•-••-••-••-•",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 28
+    },
+    {
+      "name": "🇦🇺••AUSTRALIAN••",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "533235326373441",
+      "mentionable": false,
+      "position": 29
+    },
+    {
+      "name": "Discord Me",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "66561",
+      "mentionable": false,
+      "position": 9
+    },
+    {
+      "name": "👑••OWNER••",
+      "color": "#000000",
+      "hoist": true,
+      "permissions": "420013441810431",
+      "mentionable": false,
+      "position": 50
+    },
+    {
+      "name": "•-••-••-••-•COLOURS•-••-••-••-•",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "533235326373441",
+      "mentionable": false,
+      "position": 41
+    },
+    {
+      "name": "🟣••PURPLE••",
+      "color": "#843da4",
+      "hoist": false,
+      "permissions": "533235326373441",
+      "mentionable": false,
+      "position": 35
+    },
+    {
+      "name": "•-••-••-••-•ROLES•-••-••-••-•",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "533235326373441",
+      "mentionable": false,
+      "position": 51
+    },
+    {
+      "name": "⚔️••MODERATORS••",
+      "color": "#000000",
+      "hoist": true,
+      "permissions": "32957699452871",
+      "mentionable": false,
+      "position": 48
+    },
+    {
+      "name": "🟠••ORANGE••",
+      "color": "#d6680e",
+      "hoist": false,
+      "permissions": "533235326373441",
+      "mentionable": false,
+      "position": 36
+    },
+    {
+      "name": "🔴••RED••",
+      "color": "#ff0000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 40
+    },
+    {
+      "name": "•-••-••-••-•REIGION•-••-••-••-•",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 34
+    },
+    {
+      "name": "Quarenteen",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 12
+    },
+    {
+      "name": "🇿🇦••AFRICAN••",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "533235326373441",
+      "mentionable": false,
+      "position": 30
+    },
+    {
+      "name": "2️⃣0️⃣••LEVEL-20",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 24
+    },
+    {
+      "name": "Freelancer",
+      "color": "#9b59b6",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": true,
+      "position": 21
+    },
+    {
+      "name": "Unverified",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 13
+    },
+    {
+      "name": "📍••PING ME••",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 16
+    },
+    {
+      "name": "💻••DEV••",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 15
+    },
+    {
+      "name": "Alex",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "8",
+      "mentionable": false,
+      "position": 10
+    },
+    {
+      "name": "new role",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "562949953421312",
+      "mentionable": false,
+      "position": 5
+    },
+    {
+      "name": "🍚••ASIAN••",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 33
+    },
+    {
+      "name": "new role",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "562949953421312",
+      "mentionable": false,
+      "position": 8
+    },
+    {
+      "name": "Chat Ping",
+      "color": "#ff0000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 3
+    },
+    {
+      "name": "🔒••ADMINS••",
+      "color": "#000000",
+      "hoist": true,
+      "permissions": "420013441810431",
+      "mentionable": false,
+      "position": 49
+    },
+    {
+      "name": "5️⃣••LEVEL-5",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 26
+    },
+    {
+      "name": "𝖊𝖒𝖒𝖆",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "326820555847",
+      "mentionable": false,
+      "position": 4
+    },
+    {
+      "name": "cool",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 17
+    },
+    {
+      "name": "bhutni chodne wala",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 18
+    },
+    {
+      "name": "🎯••HELPER••",
+      "color": "#000000",
+      "hoist": true,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 45
+    },
+    {
+      "name": "5️⃣0️⃣••LEVEL-50",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 23
+    },
+    {
+      "name": "🚩••TRIAL-MOD••",
+      "color": "#000000",
+      "hoist": true,
+      "permissions": "32957699452871",
+      "mentionable": false,
+      "position": 47
+    },
+    {
+      "name": "🟢••GREEN••",
+      "color": "#69c31d",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 39
+    },
+    {
+      "name": "🇺🇲••AMERICAN••",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "533235326373441",
+      "mentionable": false,
+      "position": 31
+    },
+    {
+      "name": "🤖••BOTS••",
+      "color": "#000000",
+      "hoist": true,
+      "permissions": "560750930165759",
+      "mentionable": false,
+      "position": 44
+    },
+    {
+      "name": "1️⃣••LEVEL-1",
+      "color": "#000000",
+      "hoist": false,
+      "permissions": "0",
+      "mentionable": false,
+      "position": 27
+    }
+  ],
+  "channels": [
+    {
+      "name": "💬┃chat",
+      "type": "GUILD_TEXT",
+      "position": 0,
+      "parentId": "1191380826894630912",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        },
+        {
+          "id": "1205180220395753595",
+          "type": "role",
+          "allow": "0",
+          "deny": "3072"
+        },
+        {
+          "id": "1198484461776547950",
+          "type": "role",
+          "allow": "3072",
+          "deny": "2147483648"
+        },
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "65536",
+          "deny": "3072"
+        }
+      ]
+    },
+    {
+      "name": "📰┃news",
+      "type": "GUILD_TEXT",
+      "position": 0,
+      "parentId": "1191381310585974927",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1191610227766857789",
+          "type": "role",
+          "allow": "274877907968",
+          "deny": "2048"
+        },
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "274877973504",
+          "deny": "2048"
+        },
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        }
+      ]
+    },
+    {
+      "name": "📌┃self-roles",
+      "type": "GUILD_TEXT",
+      "position": 1,
+      "parentId": "1191381310585974927",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1191610227766857789",
+          "type": "role",
+          "allow": "1024",
+          "deny": "2048"
+        },
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "66560",
+          "deny": "2048"
+        },
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        }
+      ]
+    },
+    {
+      "name": "🔏┃staff-chat",
+      "type": "GUILD_TEXT",
+      "position": 0,
+      "parentId": "1193431618728230973",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        },
+        {
+          "id": "1191592903080955964",
+          "type": "role",
+          "allow": "1024",
+          "deny": "0"
+        },
+        {
+          "id": "1191382370893443273",
+          "type": "role",
+          "allow": "1024",
+          "deny": "0"
+        },
+        {
+          "id": "1205180220395753595",
+          "type": "role",
+          "allow": "0",
+          "deny": "3072"
+        },
+        {
+          "id": "1191382557246357534",
+          "type": "role",
+          "allow": "1024",
+          "deny": "0"
+        },
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "0",
+          "deny": "1024"
+        }
+      ]
+    },
+    {
+      "name": "💀┃bumps",
+      "type": "GUILD_TEXT",
+      "position": 3,
+      "parentId": "1191380826894630912",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1198484461776547950",
+          "type": "role",
+          "allow": "1024",
+          "deny": "2048"
+        },
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "2147483648",
+          "deny": "3072"
+        },
+        {
+          "id": "1239595916013604905",
+          "type": "member",
+          "allow": "0",
+          "deny": "0"
+        },
+        {
+          "id": "1205180220395753595",
+          "type": "role",
+          "allow": "0",
+          "deny": "3072"
+        },
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        },
+        {
+          "id": "1192838971366051850",
+          "type": "role",
+          "allow": "216064",
+          "deny": "0"
+        }
+      ]
+    },
+    {
+      "name": "📁┃code",
+      "type": "GUILD_FORUM",
+      "position": 2,
+      "parentId": "1191380826894630912",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1198484461776547950",
+          "type": "role",
+          "allow": "274879005696",
+          "deny": "0"
+        },
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        },
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "67584",
+          "deny": "1024"
+        },
+        {
+          "id": "1191382557246357534",
+          "type": "role",
+          "allow": "1049600",
+          "deny": "0"
+        },
+        {
+          "id": "1192838971366051850",
+          "type": "role",
+          "allow": "1048576",
+          "deny": "1024"
+        }
+      ]
+    },
+    {
+      "name": "📄┃logs",
+      "type": "GUILD_TEXT",
+      "position": 2,
+      "parentId": "1193431618728230973",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "0",
+          "deny": "52224"
+        },
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        },
+        {
+          "id": "1205180220395753595",
+          "type": "role",
+          "allow": "0",
+          "deny": "3072"
+        }
+      ]
+    },
+    {
+      "name": "📜┃mod-logs",
+      "type": "GUILD_TEXT",
+      "position": 1,
+      "parentId": "1193431618728230973",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1205180220395753595",
+          "type": "role",
+          "allow": "0",
+          "deny": "3072"
+        },
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        },
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "262144",
+          "deny": "52224"
+        }
+      ]
+    },
+    {
+      "name": "📁┃freemium",
+      "type": "GUILD_TEXT",
+      "position": 2,
+      "parentId": "1191381310585974927",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1191610227766857789",
+          "type": "role",
+          "allow": "1024",
+          "deny": "2048"
+        },
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "65536",
+          "deny": "3072"
+        },
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        }
+      ]
+    },
+    {
+      "name": "🤖┃terminal",
+      "type": "GUILD_TEXT",
+      "position": 1,
+      "parentId": "1191380826894630912",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1205180220395753595",
+          "type": "role",
+          "allow": "0",
+          "deny": "3072"
+        },
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        },
+        {
+          "id": "1239595916013604905",
+          "type": "member",
+          "allow": "0",
+          "deny": "0"
+        },
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "2147483648",
+          "deny": "3072"
+        },
+        {
+          "id": "1198484461776547950",
+          "type": "role",
+          "allow": "3072",
+          "deny": "0"
+        },
+        {
+          "id": "1192838971366051850",
+          "type": "role",
+          "allow": "216064",
+          "deny": "0"
+        }
+      ]
+    },
+    {
+      "name": "💰┃market",
+      "type": "GUILD_FORUM",
+      "position": 2,
+      "parentId": "1302111413367734312",
+      "topic": "#  Marketplace Guidelines\n\n---\n\n##  General Posting Guidelines\n\n1. **Be Respectful**: Treat everyone with respect, and communicate professionally.\n2. **Stay on Topic**: Post in the appropriate channels (e.g., use **Client** tag for hiring and **#Freelancer** tag for offering services).\n3. **No Spam**: Avoid repetitive posts or promoting unrelated services.\n4. **No Scams or Misleading Posts**: Only post genuine opportunities or services; scams will lead to a permanent ban.\n\n---\n\n## 💼 For Clients  – Posting Guidelines\n\n**Channel**: `#Client`\n\n1. **Job Title**: Start with a clear job title (e.g., \"Need a custom economy discord bot \").\n2. **Project Details**: Provide a short description of the project or work needed.\n3. **Payment Terms**: Indicate whether it’s hourly, project-based, or other, and the payment method (e.g., PayPal, bank transfer or crypto etc).\n4. **Deadline**: Mention any deadlines for the project, if applicable.\n5. **Contact Information**: Include your preferred contact method (e.g., Discord DMs, email).\n\n> **Example Post**:  \n> \n> ### **Job Title**: Need a Custom Economy Discord Bot  \n> **Details**: Looking for someone to create a Discord bot with a custom economy system, including commands for earning, spending, and leaderboard functionality.  \n> **Skills**: Proficient in JavaScript or Python, experience with Discord.js or Discord.py  \n> **Payment**: $50, PayPal or bank transfer  \n> **Deadline**: Complete within 2 weeks  \n> **Contact**: email => krishna.js@proton.me or DM @wireguard.\n\n---\n> **Example Post**:  \n> \n> ### **Service**: Discord Bot Development  \n> **Skills and Experience**: 3 years in Discord Development, proficient in Discord.js and Node.js  \n> **Portfolio**: [Link to Portfolio](https://github.com/krishnassh/)  \n> **Rates**: Project-based, starting at $50 per bot (prices may vary based on complexity)  \n> **Availability**: Available to start immediately  \n> **Contact**: DM @wireguard. or email at krishna.js@proton.me\n\n---\n\n## ⚠️ Additional Tips\n- **Keep It Professional**: Use proper language and avoid excessive emojis or CAPS.\n- **Updates**: If your job or service is no longer available, please edit or delete your post.\n\n---\n\nThank you for reading!",
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "0",
+          "deny": "3072"
+        },
+        {
+          "id": "1198484461776547950",
+          "type": "role",
+          "allow": "3072",
+          "deny": "0"
+        }
+      ]
+    },
+    {
+      "name": "😎┃showcase",
+      "type": "GUILD_FORUM",
+      "position": 1,
+      "parentId": "1302111413367734312",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "0",
+          "deny": "3072"
+        },
+        {
+          "id": "1198484461776547950",
+          "type": "role",
+          "allow": "3072",
+          "deny": "0"
+        }
+      ]
+    },
+    {
+      "name": "🤝┃partnerships",
+      "type": "GUILD_TEXT",
+      "position": 3,
+      "parentId": "1191381310585974927",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1191610227766857789",
+          "type": "role",
+          "allow": "1024",
+          "deny": "2048"
+        },
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "66560",
+          "deny": "2048"
+        },
+        {
+          "id": "1201768921703653450",
+          "type": "role",
+          "allow": "0",
+          "deny": "2048"
+        }
+      ]
+    },
+    {
+      "name": "👀┃autobumpr",
+      "type": "GUILD_TEXT",
+      "position": 0,
+      "parentId": "1302111413367734312",
+      "topic": null,
+      "nsfw": false,
+      "rateLimitPerUser": 0,
+      "permissionOverwrites": [
+        {
+          "id": "1191380825980293220",
+          "type": "role",
+          "allow": "0",
+          "deny": "3072"
+        },
+        {
+          "id": "1198484461776547950",
+          "type": "role",
+          "allow": "1049600",
+          "deny": "2048"
+        }
+      ]
+    }
+  ],
+  "categoryChannels": [
+    {
+      "name": "⛳┃Text",
+      "position": 1,
+      "id": "1191380826894630912"
+    },
+    {
+      "name": "🎉 | Misc",
+      "position": 0,
+      "id": "1191381310585974927"
+    },
+    {
+      "name": "🎯 | Staff",
+      "position": 3,
+      "id": "1193431618728230973"
+    },
+    {
+      "name": "🛒┃Marketplace",
+      "position": 2,
+      "id": "1302111413367734312"
+    }
+  ]
+}
