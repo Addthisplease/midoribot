@@ -16,14 +16,15 @@ const fs = require('fs').promises; // Regular fs module for streams
 const fsPromises = require('fs').promises; // Promisified fs for async/await
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const cliProgress = require('cli-progress');
-const os = require('os');
 const chalk = require('chalk'); // Add chalk for colored text
 const figlet = require('figlet'); // Add figlet for ASCII art
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' }); // Temporary storage for uploaded files
 const WorkerPool = require('./workerPool');
-const messagePool = new WorkerPool('./messageWorker.js', Math.max(2, Math.floor(os.cpus().length / 2)));
-const downloadPool = new WorkerPool('./messageWorker.js', Math.max(2, Math.floor(os.cpus().length / 2)));
+
+// For Bun, just use a fixed number of workers since os module isn't fully supported
+const messagePool = new WorkerPool('./messageWorker.js', 2); // Use fixed value of 2 workers
+const downloadPool = new WorkerPool('./messageWorker.js', 2); // Use fixed value of 2 workers
 
 // Constants
 const RATE_LIMIT_DELAY = 1000; // 1 second delay between messages
