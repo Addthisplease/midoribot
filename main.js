@@ -471,10 +471,11 @@ async function backupDMChannel(channel) {
     
     return {
       success: true,
-      backupId: backupFileName,
+      backupId: channelName,
+      backupNumber: backupNumber,
       type: 'dm',
       path: backupPath,
-      downloadUrl: `/download/dm/${backupFileName}`
+      downloadUrl: `/download/dm/${channelName}/${backupNumber}/backup.json`
     };
   } catch (error) {
     console.error(chalk.red(`Error in backupDMChannel: ${error.message}`));
@@ -1718,39 +1719,31 @@ app.post('/backup-dm', async (req, res) => {
         res.json({
             message: 'DM backup created successfully',
             downloadUrl: result.downloadUrl,
-            backupId: result.backupId
+            backupId: result.backupId,
+            backupNumber: result.backupNumber
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Update the download route to handle the new path structure
-app.get('/download/:type/:name/:backupId', async (req, res) => {
-    const { type, name, backupId } = req.params;
-    const backupPath = path.join(__dirname, 'backups', type, name, backupId);
-    
+// Update the download route to handle all parts:
+app.get('/download/:type/:name/:number/:file', async (req, res) => {
     try {
-        // Check if file exists
-        await fs.access(backupPath);
+        const { type, name, number, file } = req.params;
+        const backupPath = path.join(__dirname, 'backups', type, `${name}-${number}`, file);
         
-        // Set appropriate headers for file download
+        if (!fsSync.existsSync(backupPath)) {
+            return res.status(404).send('Backup file not found');
+        }
+
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', `attachment; filename=${name}-${backupId}`);
+        res.setHeader('Content-Disposition', `attachment; filename=${type}-${name}-${number}-${file}`);
         
-        // Stream the file to the response
         const fileStream = fsSync.createReadStream(backupPath);
         fileStream.pipe(res);
-        
-        // Handle errors during streaming
-        fileStream.on('error', (error) => {
-            console.error(chalk.red('Error streaming backup file:', error));
-            if (!res.headersSent) {
-                res.status(500).send('Error downloading file');
-            }
-        });
     } catch (error) {
-        console.error(chalk.red(`Backup file not found: ${backupPath}`));
-        res.status(404).send('Backup file not found');
+        console.error('Download error:', error);
+        res.status(500).send('Error downloading backup');
     }
 });
