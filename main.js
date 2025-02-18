@@ -341,31 +341,22 @@ async function ensureBackupDirectories(type, name) {
 
 // Route to download the backup file
 app.get('/download/:type/:backupId', async (req, res) => {
-    const { type, backupId } = req.params;
-    const backupPath = path.join(__dirname, 'backups', type, backupId, 'backup.json');
-    
     try {
-        // Check if file exists
-        await fs.access(backupPath);
+        const { type, backupId } = req.params;
+        const backupPath = path.join(__dirname, 'backups', type, backupId, 'backup.json');
         
-        // Set appropriate headers for file download
+        if (!fsSync.existsSync(backupPath)) {
+            return res.status(404).send('Backup file not found');
+        }
+
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', `attachment; filename=${backupId}-backup.json`);
+        res.setHeader('Content-Disposition', `attachment; filename=backup-${type}-${backupId}.json`);
         
-        // Stream the file to the response
         const fileStream = fsSync.createReadStream(backupPath);
         fileStream.pipe(res);
-        
-        // Handle errors during streaming
-        fileStream.on('error', (error) => {
-            console.error(chalk.red('Error streaming backup file:', error));
-            if (!res.headersSent) {
-                res.status(500).send('Error downloading file');
-            }
-        });
     } catch (error) {
-        console.error(chalk.red(`Backup file not found: ${backupPath}`));
-        res.status(404).send('Backup file not found');
+        console.error('Download error:', error);
+        res.status(500).send('Error downloading backup');
     }
 });
 
@@ -475,11 +466,11 @@ async function backupDMChannel(channel) {
     console.log(chalk.green(`Backup saved to ${backupPath}`));
     
     return {
+      success: true,
+      backupId: backupFileName,
+      type: 'dm',
       path: backupPath,
-      type: 'users',
-      name: channelName,
-      backupNumber: backupNumber,
-      backupId: backupFileName
+      downloadUrl: `/download/dm/${backupFileName}`
     };
   } catch (error) {
     console.error(chalk.red(`Error in backupDMChannel: ${error.message}`));
@@ -999,8 +990,11 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                 backupData = backupData.messages;
             }
             
+            // Sort messages by timestamp to maintain order
+            backupData = backupData.sort((a, b) => a.timestamp - b.timestamp);
+            
             if (!Array.isArray(backupData)) {
-                throw new Error('Invalid backup format: expected an array of messages or an object with messages array');
+                throw new Error('Invalid backup format');
             }
         } catch (error) {
             return res.status(400).json({ error: `Failed to parse backup file: ${error.message}` });
@@ -1052,7 +1046,12 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                             if (channel.type === 'GUILD_TEXT') {
                                 await webhook.send(messageOptions);
                             } else {
-                                await channel.send(message.content);
+                                // For DMs, use the channel.send with webhookData
+                                await channel.send({
+                                    content: message.content,
+                                    username: messageOptions.username,
+                                    avatarURL: messageOptions.avatarURL
+                                });
                             }
                             restoredCount++;
                         }
@@ -1583,7 +1582,7 @@ async function startServer() {
         // Initialize all required directories
         initializeDirectories();
 
-        // Display welcome message
+        // Display welcome message once
         console.log(chalk.blue(figlet.textSync('Midoribot', { horizontalLayout: 'full' })));
         console.log(chalk.green('Starting Midoribot...'));
 
@@ -1698,28 +1697,22 @@ async function downloadAttachment(url, savePath, originalFilename) {
 
 // Add backup-dm route
 app.post('/backup-dm', async (req, res) => {
-    const { channelId } = req.body;
-    
     try {
-        // Fetch the channel
+        const { channelId } = req.body;
         const channel = await client.channels.fetch(channelId);
+        
         if (!channel) {
             return res.status(404).json({ error: 'Channel not found' });
         }
 
-        // Create backup
-        const backupResult = await backupDMChannel(channel);
+        const result = await backupDMChannel(channel);
         
-        // Return the correct download path based on the backup structure
-        const downloadPath = `/download/${backupResult.type}/${backupResult.name}-${backupResult.backupNumber}/${backupResult.backupId}`;
-        
-        res.json({ 
+        res.json({
             message: 'DM backup created successfully',
-            downloadUrl: downloadPath,
-            backupPath: backupResult.path
+            downloadUrl: result.downloadUrl,
+            backupId: result.backupId
         });
     } catch (error) {
-        console.error(chalk.red('Error creating DM backup:', error.message));
         res.status(500).json({ error: error.message });
     }
 });
