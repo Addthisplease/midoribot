@@ -401,27 +401,18 @@ async function backupDMChannel(channel) {
         const messageData = {
           author: msg.author.username,
           content: msg.content,
+          authorAvatar: msg.author.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 }),
+          timestamp: msg.createdTimestamp,
+          attachments: msg.attachments.map(att => ({
+            url: att.url,
+            filename: att.name,
+            size: att.size,
+            contentType: att.contentType
+          })),
           webhookData: {
             username: msg.author.username,
-            avatarURL: msg.author.avatar ? 
-                `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
-                `https://cdn.discordapp.com/embed/avatars/${(parseInt(msg.author.id) >> 22) % 6}.png`
-          },
-          author: {
-            id: msg.author.id,
-            username: msg.author.username,
-            avatar: msg.author.avatar
-          },
-          attachments: [],
-          timestamp: msg.createdTimestamp,
-          isGroupDM: isGroupDM,
-          recipients: isGroupDM ? channel.recipients.map(r => ({
-            id: r.id,
-            username: r.username,
-            avatar: r.avatar ? 
-                `https://cdn.discordapp.com/avatars/${r.id}/${r.avatar}` : 
-                `https://cdn.discordapp.com/embed/avatars/${(parseInt(r.id) >> 22) % 6}.png`
-          })) : null
+            avatarURL: msg.author.avatarURL({ format: 'png', dynamic: true, size: 1024 }) || 'https://cdn.discordapp.com/embed/avatars/0.png'
+          }
         };
 
         // Download attachments in parallel
@@ -1262,8 +1253,8 @@ async function backupServer(guild) {
                         
                         for (const message of messages.values()) {
                             const messageData = {
-                                content: message.content,
                                 author: message.author.username,
+                                content: message.content,
                                 authorAvatar: message.author.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 }),
                                 timestamp: message.createdTimestamp,
                                 attachments: message.attachments.map(att => ({
@@ -1275,6 +1266,7 @@ async function backupServer(guild) {
                                 webhookData: {
                                     username: message.author.username,
                                     avatarURL: message.author.avatarURL({ format: 'png', dynamic: true, size: 1024 }) || 'https://cdn.discordapp.com/embed/avatars/0.png'
+                                }
                             };
                             channelData.messages.push(messageData);
                         }
