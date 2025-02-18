@@ -396,7 +396,7 @@
                     <button onclick="backupItem('<%= item.id %>', 'dm')" class="action-button backup" title="Backup">
                       <i class="fas fa-save"></i>
                     </button>
-                    <button onclick="openRestoreModal('<%= item.id %>', 'dm')" class="action-button restore" title="Restore">
+                    <button onclick="restoreBackup('<%= item.id %>', 'dm')" class="restore-button dm-restore">
                       <i class="fas fa-upload"></i>
                     </button>
                   </div>
@@ -423,8 +423,8 @@
                     <button onclick="backupItem('<%= item.id %>', 'guild')" class="action-button backup" title="Backup">
                       <i class="fas fa-save"></i>
                     </button>
-                    <button onclick="openRestoreModal('<%= item.id %>', 'guild')" class="action-button restore" title="Restore">
-                      <i class="fas fa-upload"></i>
+                    <button onclick="restoreBackup('<%= item.id %>', 'guild')" class="restore-button guild-restore">
+                      Restore
                     </button>
                   </div>
                 </div>
@@ -635,7 +635,8 @@
       }
     }
 
-    async function restoreItem(id, type) {
+    async function restoreBackup(id, type) {
+      // Get the backup file from the downloads folder
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.json';
@@ -646,8 +647,11 @@
         const formData = new FormData();
         formData.append('backupFile', input.files[0]);
         formData.append('channelId', id);
+        formData.append('type', type);
         
         try {
+          showToast('Starting restore...');
+          
           const response = await fetch('/restore-with-webhook', {
             method: 'POST',
             body: formData

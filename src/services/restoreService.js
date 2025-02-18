@@ -77,19 +77,36 @@ class RestoreService {
     }
 
     async restoreDMMessage(channel, message) {
-        // Send text content
-        if (message.content?.trim()) {
-            await channel.send(message.content);
-        }
+        try {
+            // Send text content
+            if (message.content?.trim()) {
+                await channel.send({
+                    content: message.content,
+                    // For DMs, we don't use webhooks, so we send as the bot
+                    allowedMentions: { parse: [] } // Prevent unwanted mentions
+                });
+            }
 
-        // Send attachments
-        if (message.attachments?.length > 0) {
-            for (const attachment of message.attachments) {
-                if (attachment.url) {
-                    await channel.send({ files: [attachment.url] });
-                    await delay(1000);
+            // Send attachments
+            if (message.attachments?.length > 0) {
+                for (const attachment of message.attachments) {
+                    try {
+                        if (attachment.url) {
+                            await channel.send({
+                                files: [attachment.url],
+                                allowedMentions: { parse: [] }
+                            });
+                        }
+                        await this.delay(1000); // Rate limit between attachments
+                    } catch (error) {
+                        Logger.error(`Failed to restore attachment: ${error.message}`);
+                    }
                 }
             }
+            await this.delay(1000); // Rate limit between messages
+        } catch (error) {
+            Logger.error(`Failed to restore DM message: ${error.message}`);
+            throw error;
         }
     }
 
