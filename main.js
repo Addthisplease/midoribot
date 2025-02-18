@@ -1038,7 +1038,7 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                 return new Promise(async (resolve) => {
                     try {
                         const messageOptions = {
-                            username: message.author?.username || message.author,
+                            username: message.webhookData?.username || message.author?.username || message.author,
                             avatarURL: message.webhookData?.avatarURL || 
                                 (message.author?.id && message.author?.avatar ? 
                                     `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}` : 
@@ -1051,25 +1051,16 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                             if (channel.type === 'GUILD_TEXT') {
                                 await webhook.send(messageOptions);
                             } else {
-                                // For DMs, we need to handle it differently since we can't use webhooks
-                                const dmMessageOptions = {
-                                    content: message.content,
-                                    // Use the original message's webhook data
-                                    username: message.webhookData?.username || message.author,
-                                    avatarURL: message.webhookData?.avatarURL || 
-                                        (message.author?.id && message.author?.avatar ? 
-                                            `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}` : 
-                                            `https://cdn.discordapp.com/embed/avatars/0.png`)
-                                };
-                                await channel.send(dmMessageOptions);
+                                // For DMs, send directly to channel
+                                await channel.send(message.content);
                             }
-                            restoredCount++;
                         }
 
                         // Handle attachments
-                        if (message.attachments?.length > 0) {
+                        if (message.attachments && message.attachments.length > 0) {
                             for (const attachment of message.attachments) {
                                 try {
+                                    let attachmentUrl = attachment.url;
                                     if (attachment.localPath) {
                                         const possiblePaths = [
                                             path.join(path.dirname(backupFilePath), attachment.localPath),
@@ -1078,57 +1069,44 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                                             attachment.localPath
                                         ];
 
-                                        let foundPath = null;
                                         for (const testPath of possiblePaths) {
                                             if (fsSync.existsSync(testPath)) {
-                                                foundPath = testPath;
+                                                attachmentUrl = testPath;
                                                 break;
                                             }
                                         }
-
-                                        if (foundPath) {
-                                            if (channel.type === 'GUILD_TEXT') {
-                                                await webhook.send({
-                                                    ...messageOptions,
-                                                    files: [foundPath]
-                                                });
-                                            } else {
-                                                await channel.send({ files: [foundPath] });
-                                            }
-                                        } else {
-                                            throw new Error('Local file not found');
-                                        }
-                                    } else if (attachment.url || attachment.originalUrl) {
-                                        const attachmentUrl = attachment.url || attachment.originalUrl;
-                                        if (channel.type === 'GUILD_TEXT') {
-                                            await webhook.send({
-                                                ...messageOptions,
-                                                content: attachmentUrl
-                                            });
-                                        } else {
-                                            await channel.send(attachmentUrl);
-                                        }
                                     }
-                                    restoredCount++;
-                                } catch (attachmentError) {
-                                    console.error(chalk.yellow(`Failed to restore attachment: ${attachmentError.message}`));
-                                    failedCount++;
+
+                                    if (channel.type === 'GUILD_TEXT') {
+                                        await webhook.send({
+                                            ...messageOptions,
+                                            files: [attachmentUrl]
+                                        });
+                                    } else {
+                                        // For DMs, send attachments directly
+                                        await channel.send({
+                                            content: message.content,
+                                            files: [attachmentUrl]
+                                        });
+                                    }
+                                } catch (error) {
+                                    console.error(`Error restoring attachment: ${error.message}`);
                                 }
+                                await delay(1000);
                             }
                         }
-
+                        restoredCount++;
                         resolve(true);
                     } catch (error) {
-                        console.error(chalk.red(`Error restoring message: ${error.message}`));
+                        console.error(`Error restoring message: ${error.message}`);
                         failedCount++;
                         resolve(false);
                     }
                 });
             });
 
-            // Wait for all workers in the batch to complete
             await Promise.all(workers);
-            await delay(RATE_LIMIT_DELAY * 2); // Add extra delay between batches
+            await delay(1000); // Rate limit delay between batches
         }
 
         // Cleanup webhook if it was created
@@ -1297,7 +1275,6 @@ async function backupServer(guild) {
                                 webhookData: {
                                     username: message.author.username,
                                     avatarURL: message.author.avatarURL({ format: 'png', dynamic: true, size: 1024 }) || 'https://cdn.discordapp.com/embed/avatars/0.png'
-                                }
                             };
                             channelData.messages.push(messageData);
                         }
