@@ -401,7 +401,9 @@ async function backupDMChannel(channel) {
         const messageData = {
           author: msg.author.username,
           content: msg.content,
-          authorAvatar: msg.author.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 }),
+          authorAvatar: msg.author.avatar ? 
+              `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
+              'https://cdn.discordapp.com/embed/avatars/0.png',
           timestamp: msg.createdTimestamp,
           attachments: msg.attachments.map(att => ({
             url: att.url,
@@ -411,7 +413,9 @@ async function backupDMChannel(channel) {
           })),
           webhookData: {
             username: msg.author.username,
-            avatarURL: msg.author.avatarURL({ format: 'png', dynamic: true, size: 1024 }) || 'https://cdn.discordapp.com/embed/avatars/0.png'
+            avatarURL: msg.author.avatar ? 
+                `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
+                'https://cdn.discordapp.com/embed/avatars/0.png'
           }
         };
 
@@ -1255,7 +1259,9 @@ async function backupServer(guild) {
                             const messageData = {
                                 author: message.author.username,
                                 content: message.content,
-                                authorAvatar: message.author.displayAvatarURL({ format: 'png', dynamic: true, size: 1024 }),
+                                authorAvatar: message.author.avatar ? 
+                                    `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}` : 
+                                    'https://cdn.discordapp.com/embed/avatars/0.png',
                                 timestamp: message.createdTimestamp,
                                 attachments: message.attachments.map(att => ({
                                     url: att.url,
@@ -1265,7 +1271,9 @@ async function backupServer(guild) {
                                 })),
                                 webhookData: {
                                     username: message.author.username,
-                                    avatarURL: message.author.avatarURL({ format: 'png', dynamic: true, size: 1024 }) || 'https://cdn.discordapp.com/embed/avatars/0.png'
+                                    avatarURL: message.author.avatar ? 
+                                        `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}` : 
+                                        'https://cdn.discordapp.com/embed/avatars/0.png'
                                 }
                             };
                             channelData.messages.push(messageData);
