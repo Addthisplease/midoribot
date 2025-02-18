@@ -635,41 +635,36 @@
       }
     }
 
-    async function restoreItem() {
-      const targetId = targetIdInput.value;
-      const clearServer = clearServerCheckbox.checked;
-      const restoreSettings = restoreSettingsCheckbox.checked;
-      if (!targetId) {
-        logToConsole('Please enter a target server/channel ID.', true);
-        return;
-      }
+    async function restoreItem(id, type) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      
+      input.onchange = async function() {
+        if (!input.files[0]) return;
+        
+        const formData = new FormData();
+        formData.append('backupFile', input.files[0]);
+        formData.append('channelId', id);
+        
+        try {
+          const response = await fetch('/restore-with-webhook', {
+            method: 'POST',
+            body: formData
+          });
 
-      logToConsole(`Starting restore for ${currentBackupType} ${currentBackupId} to target ${targetId}...`);
-      try {
-        const response = await fetch('/restore', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            backupId: currentBackupId,
-            targetId: targetId,
-            type: currentBackupType,
-            clearServer: clearServer,
-            restoreSettings: restoreSettings,
-          }),
-        });
-        const data = await response.json();
-        if (response.ok) {
-          logToConsole(data.message);
-        } else {
-          logToConsole(`Restore failed: ${data.error}`, true);
+          const data = await response.json();
+          if (response.ok) {
+            showToast(data.message);
+          } else {
+            throw new Error(data.error || 'Restore failed');
+          }
+        } catch (error) {
+          showToast(error.message, true);
         }
-      } catch (error) {
-        logToConsole(`Restore failed: ${error.message}`, true);
-      }
+      };
 
-      closeRestoreModal();
+      input.click();
     }
 
     async function fetchServerChannels(serverId) {
