@@ -407,6 +407,11 @@ async function backupDMChannel(channel) {
                 `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
                 `https://cdn.discordapp.com/embed/avatars/${(parseInt(msg.author.id) >> 22) % 6}.png`
           },
+          author: {
+            id: msg.author.id,
+            username: msg.author.username,
+            avatar: msg.author.avatar
+          },
           attachments: [],
           timestamp: msg.createdTimestamp,
           isGroupDM: isGroupDM,
@@ -1032,11 +1037,11 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                 return new Promise(async (resolve) => {
                     try {
                         const messageOptions = {
-                            username: message.webhookData?.username || message.author?.username || message.author,
+                            username: message.author?.username || message.author,
                             avatarURL: message.webhookData?.avatarURL || 
                                 (message.author?.id && message.author?.avatar ? 
                                     `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}` : 
-                                    `https://cdn.discordapp.com/embed/avatars/${(parseInt(message.author?.id || '0') >> 22) % 6}.png`),
+                                    `https://cdn.discordapp.com/embed/avatars/0.png`),
                             content: message.content
                         };
 
@@ -1045,12 +1050,17 @@ app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) 
                             if (channel.type === 'GUILD_TEXT') {
                                 await webhook.send(messageOptions);
                             } else {
-                                // For DMs, use the channel.send with webhookData
-                                await channel.send({
+                                // For DMs, we need to handle it differently since we can't use webhooks
+                                const dmMessageOptions = {
                                     content: message.content,
-                                    username: messageOptions.username,
-                                    avatarURL: messageOptions.avatarURL
-                                });
+                                    // Use the original message's webhook data
+                                    username: message.webhookData?.username || message.author,
+                                    avatarURL: message.webhookData?.avatarURL || 
+                                        (message.author?.id && message.author?.avatar ? 
+                                            `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}` : 
+                                            `https://cdn.discordapp.com/embed/avatars/0.png`)
+                                };
+                                await channel.send(dmMessageOptions);
                             }
                             restoredCount++;
                         }
