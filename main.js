@@ -59,7 +59,6 @@ function initializeDirectories() {
 
 // Display a welcome message with ASCII art
 console.log(chalk.blue(figlet.textSync('Midoribot', { horizontalLayout: 'full' })));
-console.log(chalk.green('Starting Midoribot...'));
 
 // Read the backup file
 const client = new Client();
@@ -1583,7 +1582,6 @@ async function startServer() {
         initializeDirectories();
 
         // Display welcome message once
-        console.log(chalk.blue(figlet.textSync('Midoribot', { horizontalLayout: 'full' })));
         console.log(chalk.green('Starting Midoribot...'));
 
         // Login to Discord
