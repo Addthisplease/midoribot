@@ -1704,7 +1704,7 @@ async function downloadAttachment(url, savePath, originalFilename) {
     }
 }
 
-// Add backup-dm route
+// Update the backup-dm route
 app.post('/backup-dm', async (req, res) => {
     try {
         const { channelId } = req.body;
@@ -1718,9 +1718,7 @@ app.post('/backup-dm', async (req, res) => {
         
         res.json({
             message: 'DM backup created successfully',
-            downloadUrl: result.downloadUrl,
-            backupId: result.backupId,
-            backupNumber: result.backupNumber
+            success: true
         });
     } catch (error) {
         res.status(500).json({ error: error.message });

@@ -308,6 +308,28 @@
         font-size: 1.25rem;
       }
     }
+    /* Add toast styles */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 16px 24px;
+      border-radius: 8px;
+      background-color: #43b581;
+      color: white;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .toast.error {
+      background-color: #f04747;
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -546,6 +568,8 @@
     </div>
   </div>
 
+  <div id="toast" class="toast"></div>
+
   <script>
     const consoleDiv = document.getElementById('console');
     const restoreModal = document.getElementById('restoreModal');
@@ -573,57 +597,42 @@
       restoreModal.style.display = 'none';
     }
 
-    async function backupItem(id, type) {
-      logToConsole(`Starting backup for ${type} ${id}...`);
-      try {
-        if (type === 'dm') {
-          const backupId = generateBackupId();
-          const response = await fetch('/backup-dm', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-              channelId: id,
-              backupId: backupId 
-            })
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Server error: ${errorText}`);
-          }
-
-          const data = await response.json();
-          logToConsole(data.message);
-          // Trigger download
-          window.location.href = `/download/${backupId}`;
-        } else if (type === 'guild') {
-          // Handle guild backup the same way as manual server backup
-          const response = await fetch('/backup-server', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ serverId: id })
-          });
-
-          const data = await response.json();
-          if (response.ok) {
-            logToConsole('Server backup created successfully');
-            // Trigger download
-            window.location.href = `/download/${data.backupId}`;
-          } else {
-            throw new Error(data.error);
-          }
-        } else {
-          logToConsole(`Unsupported backup type: ${type}`, true);
-        }
-      } catch (error) {
-        logToConsole(`Backup failed: ${error.message}`, true);
-      }
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast ${isError ? 'error' : ''}`;
+      
+      // Force reflow
+      toast.offsetHeight;
+      
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
     }
 
-    function generateBackupId() {
-      return `backup-${Date.now()}`;
+    async function backupItem(id, type) {
+      try {
+        const response = await fetch(`/backup-${type}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            channelId: type === 'dm' ? id : undefined,
+            serverId: type === 'guild' ? id : undefined
+          })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          showToast('Backup completed successfully!');
+        } else {
+          throw new Error(data.error || 'Backup failed');
+        }
+      } catch (error) {
+        showToast(error.message, true);
+      }
     }
 
     async function restoreItem() {
@@ -661,208 +670,6 @@
       }
 
       closeRestoreModal();
-    }
-
-    async function backupServer() {
-      const serverId = document.getElementById('backupServerId').value;
-      if (!serverId) {
-        logToConsole('Please enter a server ID', true);
-        return;
-      }
-
-      try {
-        const response = await fetch('/backup-server', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ serverId })
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-          logToConsole('Server backup created successfully');
-          // Trigger download
-          window.location.href = `/download/${data.backupId}`;
-        } else {
-          logToConsole(`Backup failed: ${data.error}`, true);
-        }
-      } catch (error) {
-        logToConsole(`Backup failed: ${error.message}`, true);
-      }
-    }
-
-    document.getElementById('serverRestoreForm').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const formData = new FormData(event.target);
-      const serverId = formData.get('serverId');
-      const file = formData.get('backupFile');
-
-      if (!serverId || !file) {
-        logToConsole('Please provide both server ID and backup file', true);
-        return;
-      }
-
-      logToConsole('Starting server restore...');
-      try {
-        const response = await fetch('/restore-server', {
-          method: 'POST',
-          body: formData
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-          logToConsole('Server restored successfully');
-        } else {
-          logToConsole(`Restore failed: ${data.error}`, true);
-        }
-      } catch (error) {
-        logToConsole(`Restore failed: ${error.message}`, true);
-      }
-    });
-
-    // Add DM restore form handler
-    document.getElementById('dmRestoreForm').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const formData = new FormData(event.target);
-      const channelId = formData.get('channelId');
-      const file = formData.get('backupFile');
-
-      if (!channelId || !file) {
-        logToConsole('Please provide both DM ID and backup file', true);
-        return;
-      }
-
-      logToConsole('Starting message restore with webhook...');
-      try {
-        const response = await fetch('/restore-with-webhook', {
-          method: 'POST',
-          body: formData
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-          logToConsole('Messages restored successfully');
-        } else {
-          logToConsole(`Restore failed: ${data.error}`, true);
-        }
-      } catch (error) {
-        logToConsole(`Restore failed: ${error.message}`, true);
-      }
-    });
-
-    async function openRestoreModal(id, type) {
-      if (type === 'guild') {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        
-        input.onchange = async (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-
-          const formData = new FormData();
-          formData.append('backupFile', file);
-          formData.append('serverId', id);
-
-          logToConsole(`Starting restore for ${type} ${id}...`);
-          try {
-            const response = await fetch('/restore-server', {
-              method: 'POST',
-              body: formData
-            });
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) break;
-
-              const lines = decoder.decode(value).split('\n');
-              for (const line of lines) {
-                if (!line) continue;
-                const data = JSON.parse(line);
-                if (data.status) {
-                  // Always show in normal color, never as error
-                  logToConsole(data.status, false);
-                }
-              }
-            }
-          } catch (error) {
-            // Even connection errors should show as normal messages
-            logToConsole('Server restore completed', false);
-          }
-        };
-
-        input.click();
-      } else if (type === 'dm') {
-        // For DM restore
-        const targetChannelId = prompt('Enter the target channel ID where messages should be restored:');
-        if (!targetChannelId) {
-          logToConsole('Restore cancelled: No target channel ID provided', true);
-          return;
-        }
-
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        
-        input.onchange = async (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-
-          const formData = new FormData();
-          formData.append('backupFile', file);
-          formData.append('channelId', targetChannelId); // Use the provided target channel ID
-
-          logToConsole(`Starting restore to channel ${targetChannelId}...`);
-          try {
-            const response = await fetch('/restore-from-file', {
-              method: 'POST',
-              body: formData
-            });
-
-            const data = await response.json();
-            if (response.ok) {
-              logToConsole('DM restored successfully');
-            } else {
-              logToConsole(`Restore failed: ${data.error}`, true);
-            }
-          } catch (error) {
-            logToConsole(`Restore failed: ${error.message}`, true);
-          }
-        };
-
-        input.click();
-      }
-    }
-
-    function switchTab(tab) {
-      // Remove active class from all tabs and content
-      document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active-tab'));
-      document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
-
-      // Add active class to selected tab and content
-      document.getElementById(`${tab}Tab`).classList.add('active-tab');
-      document.getElementById(`${tab}Content`).classList.add('active');
-    }
-
-    function toggleRestoreType(type) {
-      const serverBtn = document.getElementById('serverRestoreBtn');
-      const messagesBtn = document.getElementById('messagesRestoreBtn');
-      const serverForm = document.getElementById('serverRestoreForm');
-      const messagesForm = document.getElementById('channelMessagesRestoreForm');
-
-      if (type === 'server') {
-        serverBtn.classList.remove('opacity-50');
-        messagesBtn.classList.add('opacity-50');
-        serverForm.classList.remove('hidden');
-        messagesForm.classList.add('hidden');
-      } else {
-        serverBtn.classList.add('opacity-50');
-        messagesBtn.classList.remove('opacity-50');
-        serverForm.classList.add('hidden');
-        messagesForm.classList.remove('hidden');
-      }
     }
 
     async function fetchServerChannels(serverId) {
@@ -913,37 +720,34 @@
       }
     }
 
-    // Update the channel messages restore form handler
-    document.getElementById('channelMessagesRestoreForm').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const formData = new FormData(event.target);
-      const channelId = formData.get('channelId');
-      const file = formData.get('backupFile');
+    function switchTab(tab) {
+      // Remove active class from all tabs and content
+      document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active-tab'));
+      document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
 
-      if (!channelId || !file) {
-        logToConsole('Please provide both channel and backup file', true);
-        return;
+      // Add active class to selected tab and content
+      document.getElementById(`${tab}Tab`).classList.add('active-tab');
+      document.getElementById(`${tab}Content`).classList.add('active');
+    }
+
+    function toggleRestoreType(type) {
+      const serverBtn = document.getElementById('serverRestoreBtn');
+      const messagesBtn = document.getElementById('messagesRestoreBtn');
+      const serverForm = document.getElementById('serverRestoreForm');
+      const messagesForm = document.getElementById('channelMessagesRestoreForm');
+
+      if (type === 'server') {
+        serverBtn.classList.remove('opacity-50');
+        messagesBtn.classList.add('opacity-50');
+        serverForm.classList.remove('hidden');
+        messagesForm.classList.add('hidden');
+      } else {
+        serverBtn.classList.add('opacity-50');
+        messagesBtn.classList.remove('opacity-50');
+        serverForm.classList.add('hidden');
+        messagesForm.classList.remove('hidden');
       }
-
-      const channelName = document.querySelector(`#channelSelect option[value="${channelId}"]`)?.textContent;
-      logToConsole(`Starting message restore to ${channelName}...`);
-      
-      try {
-        const response = await fetch('/restore-with-webhook', {
-          method: 'POST',
-          body: formData
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-          logToConsole(data.message || 'Messages restored successfully');
-        } else {
-          logToConsole(`Restore failed: ${data.error}`, true);
-        }
-      } catch (error) {
-        logToConsole(`Restore failed: ${error.message}`, true);
-      }
-    });
+    }
 
     function toggleMessageRestoreType(type) {
       const dmBtn = document.getElementById('dmRestoreBtn');
@@ -963,85 +767,6 @@
         channelForm.classList.remove('hidden');
       }
     }
-
-    async function fetchServerChannelsForMessages(serverId) {
-      const channelSelect = document.getElementById('messageRestoreChannelSelect');
-      channelSelect.disabled = true;
-      channelSelect.innerHTML = '<option value="">Loading channels...</option>';
-
-      try {
-        const response = await fetch(`/server-channels/${serverId}`);
-        const data = await response.json();
-
-        if (response.ok) {
-          // Group channels by category
-          const channelsByCategory = data.channels.reduce((acc, channel) => {
-            if (!acc[channel.parent]) {
-              acc[channel.parent] = [];
-            }
-            acc[channel.parent].push(channel);
-            return acc;
-          }, {});
-
-          // Clear and populate the select
-          channelSelect.innerHTML = '<option value="">Select a channel</option>';
-
-          // Add channels grouped by category
-          Object.entries(channelsByCategory).forEach(([category, channels]) => {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = category;
-            
-            channels.forEach(channel => {
-              const option = document.createElement('option');
-              option.value = channel.id;
-              option.textContent = `#${channel.name}`;
-              optgroup.appendChild(option);
-            });
-
-            channelSelect.appendChild(optgroup);
-          });
-
-          channelSelect.disabled = false;
-        } else {
-          channelSelect.innerHTML = '<option value="">Error loading channels</option>';
-          logToConsole(`Failed to fetch channels: ${data.error}`, true);
-        }
-      } catch (error) {
-        channelSelect.innerHTML = '<option value="">Error loading channels</option>';
-        logToConsole(`Failed to fetch channels: ${error.message}`, true);
-      }
-    }
-
-    // Update the channel restore form handler
-    document.getElementById('channelRestoreForm').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const formData = new FormData(event.target);
-      const channelId = formData.get('channelId');
-      const file = formData.get('backupFile');
-
-      if (!channelId || !file) {
-        logToConsole('Please provide both channel ID and backup file', true);
-        return;
-      }
-
-      logToConsole(`Starting message restore to channel ${channelId}...`);
-      
-      try {
-        const response = await fetch('/restore-with-webhook', {
-          method: 'POST',
-          body: formData
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-          logToConsole(data.message || 'Messages restored successfully');
-        } else {
-          logToConsole(`Restore failed: ${data.error}`, true);
-        }
-      } catch (error) {
-        logToConsole(`Restore failed: ${error.message}`, true);
-      }
-    });
   </script>
 </body>
 </html>
