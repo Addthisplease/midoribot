@@ -159,29 +159,11 @@ class RestoreService {
                 }
             } else if (type === 'guild') {
                 try {
-                    // For guild channels, first get the guild
-                    const guilds = await this.client.guilds.fetch();
-                    let foundChannel = null;
-
-                    // Search through all guilds for the channel
-                    for (const [_, guild] of guilds) {
-                        try {
-                            const fullGuild = await guild.fetch();
-                            const channel = await fullGuild.channels.fetch(sourceChannelId);
-                            if (channel) {
-                                foundChannel = channel;
-                                break;
-                            }
-                        } catch (e) {
-                            continue; // Skip if we can't access this guild
-                        }
+                    // For server channels, try direct fetch first
+                    sourceChannel = await this.client.channels.fetch(sourceChannelId);
+                    if (!sourceChannel) {
+                        throw new Error('Channel not found');
                     }
-
-                    if (!foundChannel) {
-                        throw new Error(`Channel not found in any accessible server (ID: ${sourceChannelId})`);
-                    }
-
-                    sourceChannel = foundChannel;
                     Logger.success(`Found server channel: #${sourceChannel.name}`);
                 } catch (error) {
                     Logger.error(`Failed to fetch server channel: ${error.message}`);
@@ -191,6 +173,7 @@ class RestoreService {
                 throw new Error(`Invalid channel type: ${type}`);
             }
 
+            // Get target channel
             const targetChannel = await this.client.channels.fetch(targetChannelId)
                 .catch(error => {
                     Logger.error(`Failed to fetch target channel: ${error.message}`);

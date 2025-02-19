@@ -335,6 +335,17 @@
     dialog::backdrop {
       background-color: rgba(0, 0, 0, 0.85);
     }
+
+    /* Prevent color theme change when dialog opens */
+    dialog {
+      color-scheme: dark;
+    }
+
+    /* Ensure dialog maintains dark theme */
+    dialog:modal {
+      background-color: #313338;
+      color: #ffffff;
+    }
   </style>
 </head>
 <body>
@@ -574,27 +585,27 @@
   </div>
 
   <!-- Update the restore dialog -->
-  <dialog id="restoreDialog" class="bg-white p-0 rounded-lg shadow-xl text-black w-[440px] overflow-hidden">
-    <div class="bg-[#f2f3f5] p-4 border-b border-[#e3e5e8]">
-        <h3 class="text-[#060607] text-xl font-semibold">Target Channel ID</h3>
+  <dialog id="restoreDialog" class="bg-[#313338] p-0 rounded-lg shadow-xl text-white w-[440px] overflow-hidden">
+    <div class="bg-[#2b2d31] p-4 border-b border-[#1e1f22]">
+        <h3 class="text-[#f2f3f5] text-xl font-semibold">Target Channel ID</h3>
     </div>
     
     <div class="p-4">
         <input type="text" id="targetChannelId" 
-               class="w-full p-2.5 bg-[#e3e5e8] border border-[#c7ccd1] rounded text-[#2e3338] 
-                      placeholder-[#747f8d] focus:border-[#5865f2] focus:outline-none transition-all duration-200
+               class="w-full p-2.5 bg-[#1e1f22] border border-[#1e1f22] rounded text-[#f2f3f5] 
+                      placeholder-[#949ba4] focus:border-[#5865f2] focus:outline-none transition-all duration-200
                       text-sm"
                placeholder="Enter channel ID">
     </div>
 
-    <div class="bg-[#f2f3f5] p-4 flex justify-end gap-3 border-t border-[#e3e5e8]">
+    <div class="bg-[#2b2d31] p-4 flex justify-end gap-3 border-t border-[#1e1f22]">
         <button onclick="closeRestoreDialog()" 
-                class="px-4 py-2.5 bg-transparent text-[#4f5660] rounded-md 
+                class="px-4 py-2.5 bg-transparent text-[#b5bac1] rounded-md 
                        hover:underline text-sm font-medium">
             Cancel
         </button>
         <button onclick="restoreToChannel()" 
-                class="px-4 py-2.5 bg-[#5865f2] hover:bg-[#4752c4] text-[#ffffff] rounded-md 
+                class="px-4 py-2.5 bg-[#5865f2] hover:bg-[#4752c4] text-white rounded-md 
                        transition-colors duration-200 text-sm font-medium min-w-[96px] flex items-center justify-center">
             Restore
         </button>
