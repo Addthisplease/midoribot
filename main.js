@@ -154,14 +154,27 @@ app.post('/backup-guild', async (req, res) => {
 
         Logger.info(`Starting backup for server: ${server.name}`);
 
-        // Get all text channels
-        const channels = server.channels.cache.filter(channel => channel.type === 'GUILD_TEXT');
+        // Get all text channels that we have access to
+        const channels = server.channels.cache.filter(channel => 
+            channel.type === 'GUILD_TEXT' && 
+            channel.permissionsFor(server.members.me).has(['VIEW_CHANNEL', 'READ_MESSAGE_HISTORY'])
+        );
+
         let totalMessages = 0;
+        let skippedChannels = 0;
         const backupData = [];
 
         for (const [_, channel] of channels) {
             try {
-                const messages = await channel.messages.fetch({ limit: 100 });
+                Logger.info(`Backing up channel #${channel.name}...`);
+                const messages = await channel.messages.fetch({ limit: 100 }).catch(error => {
+                    Logger.warn(`Skipping channel #${channel.name} - No access`);
+                    skippedChannels++;
+                    return null;
+                });
+
+                if (!messages) continue;
+
                 const channelMessages = messages.map(msg => ({
                     author: msg.author.username,
                     content: msg.content,
@@ -183,7 +196,14 @@ app.post('/backup-guild', async (req, res) => {
                 Logger.success(`Backed up ${messages.size} messages from #${channel.name}`);
             } catch (error) {
                 Logger.error(`Failed to backup channel #${channel.name}:`, error);
+                skippedChannels++;
             }
+        }
+
+        if (backupData.length === 0) {
+            return res.status(400).json({ 
+                error: 'No messages could be backed up. Check bot permissions.' 
+            });
         }
 
         // Save backup
@@ -197,14 +217,24 @@ app.post('/backup-guild', async (req, res) => {
         
         await fs.promises.writeFile(backupPath, JSON.stringify(backupData, null, 2));
 
+        const summary = `Server backup completed: ${totalMessages} messages backed up` + 
+                       (skippedChannels > 0 ? ` (${skippedChannels} channels skipped)` : '');
+
         res.json({
-            message: `Server backup completed: ${totalMessages} messages backed up`,
+            message: summary,
             success: true,
-            backupId
+            backupId,
+            details: {
+                totalMessages,
+                skippedChannels,
+                channelsProcessed: channels.size - skippedChannels
+            }
         });
     } catch (error) {
         Logger.error('Server backup failed:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            error: 'Failed to backup server: ' + (error.message || 'Unknown error') 
+        });
     }
 });
 
