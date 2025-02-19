@@ -159,12 +159,27 @@ class RestoreService {
                 }
             } else if (type === 'guild') {
                 try {
-                    // For server channels, try direct fetch first
-                    sourceChannel = await this.client.channels.fetch(sourceChannelId);
-                    if (!sourceChannel) {
-                        throw new Error('Channel not found');
+                    // For guild channels, first get the guild that contains the channel
+                    const guilds = await this.client.guilds.fetch();
+                    let foundChannel = null;
+
+                    for (const [_, guild] of guilds) {
+                        try {
+                            const fullGuild = await guild.fetch();
+                            const channels = await fullGuild.channels.fetch();
+                            foundChannel = channels.get(sourceChannelId);
+                            if (foundChannel) break;
+                        } catch (e) {
+                            continue; // Skip if we can't access this guild
+                        }
                     }
-                    Logger.success(`Found server channel: #${sourceChannel.name}`);
+
+                    if (!foundChannel) {
+                        throw new Error('Channel not found in any accessible server');
+                    }
+
+                    sourceChannel = foundChannel;
+                    Logger.success(`Found server channel: #${sourceChannel.name} in ${sourceChannel.guild.name}`);
                 } catch (error) {
                     Logger.error(`Failed to fetch server channel: ${error.message}`);
                     throw new Error(`Could not access server channel (ID: ${sourceChannelId})`);

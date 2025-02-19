@@ -339,12 +339,19 @@
     /* Prevent color theme change when dialog opens */
     dialog {
       color-scheme: dark;
+      border: none;
+      padding: 0;
     }
 
     /* Ensure dialog maintains dark theme */
     dialog:modal {
-      background-color: #313338;
-      color: #ffffff;
+      max-width: 100vw;
+      max-height: 100vh;
+    }
+
+    /* Remove any light mode related styles */
+    .modal, .modal-content {
+      display: none;
     }
   </style>
 </head>
@@ -559,38 +566,13 @@
     </div>
   </div>
 
-  <!-- Restore Modal -->
-  <div id="restoreModal" class="modal">
-    <div class="modal-content">
-      <span class="close" onclick="closeRestoreModal()">&times;</span>
-      <h2 class="text-2xl font-bold mb-4">Restore Backup</h2>
-      <div class="mb-4">
-        <label for="targetId" class="block text-sm font-medium text-gray-700">Target Server/Channel ID</label>
-        <input type="text" id="targetId" class="w-full p-2 border rounded">
-      </div>
-      <div class="mb-4">
-        <label for="clearServer" class="block text-sm font-medium text-gray-700">
-          <input type="checkbox" id="clearServer" class="mr-2"> Clear Server Before Restore
-        </label>
-      </div>
-      <div class="mb-4">
-        <label for="restoreSettings" class="block text-sm font-medium text-gray-700">
-          <input type="checkbox" id="restoreSettings" class="mr-2"> Restore Server Settings
-        </label>
-      </div>
-      <button onclick="restoreItem()" class="button">
-        <i class="fas fa-upload"></i> Restore
-      </button>
-    </div>
-  </div>
-
   <!-- Update the restore dialog -->
   <dialog id="restoreDialog" class="bg-[#313338] p-0 rounded-lg shadow-xl text-white w-[440px] overflow-hidden">
     <div class="bg-[#2b2d31] p-4 border-b border-[#1e1f22]">
         <h3 class="text-[#f2f3f5] text-xl font-semibold">Target Channel ID</h3>
     </div>
     
-    <div class="p-4">
+    <div class="p-4 bg-[#313338]">
         <input type="text" id="targetChannelId" 
                class="w-full p-2.5 bg-[#1e1f22] border border-[#1e1f22] rounded text-[#f2f3f5] 
                       placeholder-[#949ba4] focus:border-[#5865f2] focus:outline-none transition-all duration-200
