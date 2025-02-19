@@ -147,11 +147,24 @@ class RestoreService {
             Logger.info(`Attempting to fetch channels - Source: ${sourceChannelId}, Target: ${targetChannelId}`);
 
             // Get source and target channels with better error handling
-            const sourceChannel = await this.client.channels.fetch(sourceChannelId)
-                .catch(error => {
-                    Logger.error(`Failed to fetch source channel: ${error.message}`);
-                    throw new Error(`Source channel not found or not accessible (ID: ${sourceChannelId})`);
-                });
+            let sourceChannel;
+            if (type === 'dm') {
+                try {
+                    // For DMs, we need to create/fetch the DM channel
+                    const user = await this.client.users.fetch(sourceChannelId);
+                    sourceChannel = await user.createDM();
+                    Logger.success(`Created/fetched DM channel for user: ${user.tag}`);
+                } catch (error) {
+                    Logger.error(`Failed to fetch/create DM channel: ${error.message}`);
+                    throw new Error(`Could not access DM channel (User ID: ${sourceChannelId})`);
+                }
+            } else {
+                sourceChannel = await this.client.channels.fetch(sourceChannelId)
+                    .catch(error => {
+                        Logger.error(`Failed to fetch source channel: ${error.message}`);
+                        throw new Error(`Source channel not found or not accessible (ID: ${sourceChannelId})`);
+                    });
+            }
 
             const targetChannel = await this.client.channels.fetch(targetChannelId)
                 .catch(error => {
@@ -160,10 +173,6 @@ class RestoreService {
                 });
 
             // Validate channel types and permissions
-            if (!sourceChannel.isText()) {
-                throw new Error('Source channel must be a text channel');
-            }
-
             if (!targetChannel.isText()) {
                 throw new Error('Target channel must be a text channel');
             }
@@ -174,7 +183,7 @@ class RestoreService {
                 throw new Error('Bot lacks required permissions in target channel (needs SEND_MESSAGES and MANAGE_WEBHOOKS)');
             }
 
-            Logger.info(`Starting restore from ${type === 'guild' ? 'server' : 'DM'} ${sourceChannel.name} to ${targetChannel.name}`);
+            Logger.info(`Starting restore from ${type === 'dm' ? 'DM' : 'server'} to ${targetChannel.name}`);
             let restoredCount = 0;
             let failedCount = 0;
 
@@ -191,10 +200,21 @@ class RestoreService {
             }
 
             try {
-                // Fetch messages with appropriate limit
-                const messages = await sourceChannel.messages.fetch({ limit: 100 });
+                // Fetch messages
+                const messages = await sourceChannel.messages.fetch({ limit: 100 })
+                    .catch(error => {
+                        Logger.error(`Failed to fetch messages: ${error.message}`);
+                        throw new Error('Could not fetch messages from the source channel');
+                    });
+
+                if (!messages || messages.size === 0) {
+                    throw new Error('No messages found in the source channel');
+                }
+
                 const sortedMessages = Array.from(messages.values())
                     .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+
+                Logger.info(`Found ${sortedMessages.length} messages to restore`);
 
                 for (const message of sortedMessages) {
                     try {
