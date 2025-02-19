@@ -330,6 +330,11 @@
     .toast.show {
       opacity: 1;
     }
+
+    /* Update the restore dialog to match Discord's modal style */
+    dialog::backdrop {
+      background-color: rgba(0, 0, 0, 0.85);
+    }
   </style>
 </head>
 <body>
@@ -396,7 +401,7 @@
                     <button onclick="backupItem('<%= item.id %>', 'dm')" class="action-button backup" title="Backup">
                       <i class="fas fa-save"></i>
                     </button>
-                    <button onclick="restoreBackup('<%= item.id %>', 'dm')" class="restore-button dm-restore">
+                    <button onclick="openRestoreDialog('<%= item.id %>')" class="action-button restore" title="Restore">
                       <i class="fas fa-upload"></i>
                     </button>
                   </div>
@@ -423,8 +428,8 @@
                     <button onclick="backupItem('<%= item.id %>', 'guild')" class="action-button backup" title="Backup">
                       <i class="fas fa-save"></i>
                     </button>
-                    <button onclick="restoreBackup('<%= item.id %>', 'guild')" class="restore-button guild-restore">
-                      Restore
+                    <button onclick="openRestoreDialog('<%= item.id %>')" class="action-button restore" title="Restore">
+                      <i class="fas fa-upload"></i>
                     </button>
                   </div>
                 </div>
@@ -568,6 +573,34 @@
     </div>
   </div>
 
+  <!-- Update the restore dialog -->
+  <dialog id="restoreDialog" class="bg-white p-0 rounded-lg shadow-xl text-black w-[440px] overflow-hidden">
+    <div class="bg-[#f2f3f5] p-4 border-b border-[#e3e5e8]">
+        <h3 class="text-[#060607] text-xl font-semibold">Target Channel ID</h3>
+    </div>
+    
+    <div class="p-4">
+        <input type="text" id="targetChannelId" 
+               class="w-full p-2.5 bg-[#e3e5e8] border border-[#c7ccd1] rounded text-[#2e3338] 
+                      placeholder-[#747f8d] focus:border-[#5865f2] focus:outline-none transition-all duration-200
+                      text-sm"
+               placeholder="Enter channel ID">
+    </div>
+
+    <div class="bg-[#f2f3f5] p-4 flex justify-end gap-3 border-t border-[#e3e5e8]">
+        <button onclick="closeRestoreDialog()" 
+                class="px-4 py-2.5 bg-transparent text-[#4f5660] rounded-md 
+                       hover:underline text-sm font-medium">
+            Cancel
+        </button>
+        <button onclick="restoreToChannel()" 
+                class="px-4 py-2.5 bg-[#5865f2] hover:bg-[#4752c4] text-[#ffffff] rounded-md 
+                       transition-colors duration-200 text-sm font-medium min-w-[96px] flex items-center justify-center">
+            Restore
+        </button>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast"></div>
 
   <script>
@@ -578,6 +611,9 @@
     const restoreSettingsCheckbox = document.getElementById('restoreSettings');
     let currentBackupId = null;
     let currentBackupType = null;
+    let currentChannelId = null;
+    const restoreDialog = document.getElementById('restoreDialog');
+    let currentItemType = null;
 
     function logToConsole(message, isError = false) {
       const logEntry = document.createElement('div');
@@ -636,7 +672,6 @@
     }
 
     async function restoreBackup(id, type) {
-      // Get the backup file from the downloads folder
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.json';
@@ -644,9 +679,16 @@
       input.onchange = async function() {
         if (!input.files[0]) return;
         
+        // Get the target channel ID from the form
+        const targetChannelId = document.querySelector('input[name="channelId"]').value;
+        if (!targetChannelId) {
+          showToast('Please enter a target channel ID', true);
+          return;
+        }
+        
         const formData = new FormData();
         formData.append('backupFile', input.files[0]);
-        formData.append('channelId', id);
+        formData.append('channelId', targetChannelId); // Use the entered channel ID
         formData.append('type', type);
         
         try {
@@ -765,6 +807,88 @@
         dmForm.classList.add('hidden');
         channelForm.classList.remove('hidden');
       }
+    }
+
+    // Update the DM restore form submission
+    document.getElementById('dmRestoreForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const channelId = this.querySelector('input[name="channelId"]').value;
+      const backupFile = this.querySelector('input[name="backupFile"]').files[0];
+      
+      if (!channelId || !backupFile) {
+        showToast('Please fill in all required fields', true);
+        return;
+      }
+      
+      const formData = new FormData();
+      formData.append('backupFile', backupFile);
+      formData.append('channelId', channelId);
+      
+      try {
+        showToast('Starting restore...');
+        
+        const response = await fetch('/restore-with-webhook', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          showToast(data.message);
+        } else {
+          throw new Error(data.error || 'Restore failed');
+        }
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    });
+
+    function openRestoreDialog(channelId, type = 'dm') {
+        currentChannelId = channelId;
+        currentItemType = type;
+        restoreDialog.showModal();
+    }
+
+    function closeRestoreDialog() {
+        restoreDialog.close();
+        currentChannelId = null;
+        currentItemType = null;
+    }
+
+    async function restoreToChannel() {
+        const targetChannelId = document.getElementById('targetChannelId').value;
+        
+        if (!targetChannelId) {
+            showToast('Please enter a target channel ID', true);
+            return;
+        }
+
+        try {
+            showToast('Starting restore...');
+            
+            const response = await fetch('/restore-direct', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sourceChannelId: currentChannelId,
+                    targetChannelId: targetChannelId,
+                    type: currentItemType
+                })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                showToast(data.message);
+                closeRestoreDialog();
+            } else {
+                throw new Error(data.error || 'Restore failed');
+            }
+        } catch (error) {
+            showToast(error.message, true);
+        }
     }
   </script>
 </body>

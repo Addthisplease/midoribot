@@ -30,76 +30,38 @@ class RestoreService {
                 throw new Error('Channel not found');
             }
 
-            let webhook = null;
+            Logger.info(`Starting restore to channel ${channel.id}`);
             let restoredCount = 0;
             let failedCount = 0;
 
-            // Create webhook for server channels
-            if (channel.type === 'GUILD_TEXT') {
-                webhook = await channel.createWebhook('Message Restore Bot', {
-                    avatar: this.client.user.displayAvatarURL()
-                });
-            }
+            // Process messages
+            for (const message of messages) {
+                try {
+                    // Send content
+                    if (message.content?.trim()) {
+                        await channel.send({
+                            content: message.content
+                        });
+                    }
 
-            // Process messages in batches
-            const batchSize = 10;
-            for (let i = 0; i < messages.length; i += batchSize) {
-                const batch = messages.slice(i, i + batchSize);
-                
-                for (const message of batch) {
-                    try {
-                        if (channel.type === 'GUILD_TEXT' && webhook) {
-                            // For server channels, use webhook
-                            const messageOptions = {
-                                username: message.webhookData?.username || message.author,
-                                avatarURL: message.webhookData?.avatarURL,
-                                content: message.content
-                            };
-
-                            if (message.content?.trim()) {
-                                await webhook.send(messageOptions);
-                            }
-
-                            if (message.attachments?.length > 0) {
-                                for (const attachment of message.attachments) {
-                                    if (attachment.url) {
-                                        await webhook.send({
-                                            ...messageOptions,
-                                            files: [attachment.url]
-                                        });
-                                        await delay(1000);
-                                    }
-                                }
-                            }
-                        } else {
-                            // For DMs, send directly
-                            if (message.content?.trim()) {
-                                await channel.send(message.content);
-                            }
-
-                            if (message.attachments?.length > 0) {
-                                for (const attachment of message.attachments) {
-                                    if (attachment.url) {
-                                        await channel.send({ files: [attachment.url] });
-                                        await delay(1000);
-                                    }
-                                }
+                    // Send attachments
+                    if (message.attachments?.length > 0) {
+                        for (const attachment of message.attachments) {
+                            if (attachment.url) {
+                                await channel.send({
+                                    files: [attachment.url]
+                                });
+                                await delay(1000);
                             }
                         }
-                        restoredCount++;
-                    } catch (error) {
-                        Logger.error(`Failed to restore message: ${error.message}`);
-                        failedCount++;
                     }
-                    await delay(1000); // Rate limit between messages
+                    restoredCount++;
+                    Logger.success(`Restored message ${restoredCount}`);
+                } catch (error) {
+                    Logger.error(`Failed to restore message: ${error.message}`);
+                    failedCount++;
                 }
-                
-                await delay(2000); // Additional delay between batches
-            }
-
-            // Cleanup webhook
-            if (webhook) {
-                await webhook.delete();
+                await delay(1000);
             }
 
             return {
@@ -171,6 +133,77 @@ class RestoreService {
                     await delay(1000);
                 }
             }
+        }
+    }
+
+    async restoreDirectMessages(sourceChannelId, targetChannelId) {
+        try {
+            // Get source and target channels
+            const sourceChannel = await this.client.channels.fetch(sourceChannelId);
+            const targetChannel = await this.client.channels.fetch(targetChannelId);
+
+            if (!sourceChannel || !targetChannel) {
+                throw new Error('One or both channels not found');
+            }
+
+            Logger.info(`Starting direct restore from ${sourceChannel.id} to ${targetChannel.id}`);
+            let restoredCount = 0;
+            let failedCount = 0;
+
+            // Create webhook for target channel if it's a guild channel
+            let webhook = null;
+            if (targetChannel.type === 'GUILD_TEXT') {
+                webhook = await targetChannel.createWebhook('Message Restore Bot', {
+                    avatar: this.client.user.displayAvatarURL()
+                });
+            }
+
+            // Fetch and process messages
+            const messages = await sourceChannel.messages.fetch({ limit: 100 });
+            const sortedMessages = Array.from(messages.values()).sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+
+            for (const message of sortedMessages) {
+                try {
+                    const messageOptions = {
+                        content: message.content,
+                        files: Array.from(message.attachments.values()).map(att => att.url)
+                    };
+
+                    if (webhook) {
+                        // For server channels, use webhook with author info
+                        await webhook.send({
+                            ...messageOptions,
+                            username: message.author.username,
+                            avatarURL: message.author.displayAvatarURL()
+                        });
+                    } else {
+                        // For DMs, send directly
+                        await targetChannel.send(messageOptions);
+                    }
+
+                    restoredCount++;
+                    Logger.success(`Restored message ${restoredCount}`);
+                } catch (error) {
+                    Logger.error(`Failed to restore message: ${error.message}`);
+                    failedCount++;
+                }
+                await delay(1000);
+            }
+
+            // Cleanup webhook
+            if (webhook) {
+                await webhook.delete();
+            }
+
+            return {
+                success: true,
+                restoredCount,
+                failedCount,
+                message: `Restored ${restoredCount} messages${failedCount > 0 ? `, ${failedCount} failed` : ''}`
+            };
+        } catch (error) {
+            Logger.error('Direct restore failed:', error);
+            throw error;
         }
     }
 }
