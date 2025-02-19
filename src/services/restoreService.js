@@ -150,7 +150,6 @@ class RestoreService {
             let sourceChannel;
             if (type === 'dm') {
                 try {
-                    // For DMs, we need to create/fetch the DM channel
                     const user = await this.client.users.fetch(sourceChannelId);
                     sourceChannel = await user.createDM();
                     Logger.success(`Created/fetched DM channel for user: ${user.tag}`);
@@ -158,12 +157,38 @@ class RestoreService {
                     Logger.error(`Failed to fetch/create DM channel: ${error.message}`);
                     throw new Error(`Could not access DM channel (User ID: ${sourceChannelId})`);
                 }
+            } else if (type === 'guild') {
+                try {
+                    // For guild channels, first get the guild
+                    const guilds = await this.client.guilds.fetch();
+                    let foundChannel = null;
+
+                    // Search through all guilds for the channel
+                    for (const [_, guild] of guilds) {
+                        try {
+                            const fullGuild = await guild.fetch();
+                            const channel = await fullGuild.channels.fetch(sourceChannelId);
+                            if (channel) {
+                                foundChannel = channel;
+                                break;
+                            }
+                        } catch (e) {
+                            continue; // Skip if we can't access this guild
+                        }
+                    }
+
+                    if (!foundChannel) {
+                        throw new Error(`Channel not found in any accessible server (ID: ${sourceChannelId})`);
+                    }
+
+                    sourceChannel = foundChannel;
+                    Logger.success(`Found server channel: #${sourceChannel.name}`);
+                } catch (error) {
+                    Logger.error(`Failed to fetch server channel: ${error.message}`);
+                    throw new Error(`Could not access server channel (ID: ${sourceChannelId})`);
+                }
             } else {
-                sourceChannel = await this.client.channels.fetch(sourceChannelId)
-                    .catch(error => {
-                        Logger.error(`Failed to fetch source channel: ${error.message}`);
-                        throw new Error(`Source channel not found or not accessible (ID: ${sourceChannelId})`);
-                    });
+                throw new Error(`Invalid channel type: ${type}`);
             }
 
             const targetChannel = await this.client.channels.fetch(targetChannelId)
