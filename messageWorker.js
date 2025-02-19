@@ -20,30 +20,14 @@ async function fetchMessages(data) {
         let lastId;
         
         while (true) {
-            const options = { limit: 100 };
-            if (lastId) options.before = lastId;
-            
-            const fetchedMessages = await channel.messages.fetch(options);
-            if (!fetchedMessages || fetchedMessages.size === 0) break;
-            
-            messages.push(...Array.from(fetchedMessages.values()).map(msg => ({
-                content: msg.content,
-                author: {
-                    username: msg.author.username,
-                    id: msg.author.id,
-                    avatar: msg.author.avatar ? 
-                        `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
-                        `https://cdn.discordapp.com/embed/avatars/${(parseInt(msg.author.id) >> 22) % 6}.png`
-                },
-                webhookData: {
-                    username: msg.author.username,
-                    avatarURL: msg.author.avatar ? 
-                        `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
-                        `https://cdn.discordapp.com/embed/avatars/${(parseInt(msg.author.id) >> 22) % 6}.png`
-                },
-                attachments: Array.from(msg.attachments.values()),
-                createdTimestamp: msg.createdTimestamp
-            })));
+            const fetchedMessages = await channel.messages.fetch({
+                limit: 100,
+                ...(lastId && { before: lastId })
+            });
+
+            if (fetchedMessages.size === 0) break;
+
+            messages.push(...Array.from(fetchedMessages.values()));
             lastId = fetchedMessages.last().id;
             
             await delay(1000); // Rate limit delay
@@ -57,16 +41,13 @@ async function fetchMessages(data) {
 
 async function downloadAttachment(data) {
     try {
-        const { url, savePath } = data;
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Failed to download: ${response.statusText}`);
-        }
-
+        const response = await fetch(data.url);
+        if (!response.ok) throw new Error(`Failed to download: ${response.statusText}`);
+        
         const buffer = await response.buffer();
-        await fs.writeFile(savePath, buffer);
-
-        return { success: true, path: savePath };
+        await fs.writeFile(data.savePath, buffer);
+        
+        return { success: true };
     } catch (error) {
         return { error: error.message };
     }
