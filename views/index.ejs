@@ -401,7 +401,7 @@
                     <button onclick="backupItem('<%= item.id %>', 'dm')" class="action-button backup" title="Backup">
                       <i class="fas fa-save"></i>
                     </button>
-                    <button onclick="openRestoreDialog('<%= item.id %>')" class="action-button restore" title="Restore">
+                    <button onclick="openRestoreDialog('<%= item.id %>', 'dm')" class="action-button restore" title="Restore">
                       <i class="fas fa-upload"></i>
                     </button>
                   </div>
@@ -428,7 +428,7 @@
                     <button onclick="backupItem('<%= item.id %>', 'guild')" class="action-button backup" title="Backup">
                       <i class="fas fa-save"></i>
                     </button>
-                    <button onclick="openRestoreDialog('<%= item.id %>')" class="action-button restore" title="Restore">
+                    <button onclick="openRestoreDialog('<%= item.id %>', 'guild')" class="action-button restore" title="Restore">
                       <i class="fas fa-upload"></i>
                     </button>
                   </div>
@@ -649,20 +649,24 @@
 
     async function backupItem(id, type) {
       try {
-        const response = await fetch(`/backup-${type}`, {
+        const endpoint = type === 'dm' ? '/backup-dm' : '/backup-guild';
+        const payload = type === 'dm' ? 
+          { channelId: id } : 
+          { serverId: id };
+
+        showToast(`Starting ${type === 'dm' ? 'DM' : 'server'} backup...`);
+
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ 
-            channelId: type === 'dm' ? id : undefined,
-            serverId: type === 'guild' ? id : undefined
-          })
+          body: JSON.stringify(payload)
         });
 
         const data = await response.json();
         if (response.ok) {
-          showToast('Backup completed successfully!');
+          showToast(data.message || 'Backup completed successfully!');
         } else {
           throw new Error(data.error || 'Backup failed');
         }
@@ -844,51 +848,51 @@
       }
     });
 
-    function openRestoreDialog(channelId, type = 'dm') {
-        currentChannelId = channelId;
-        currentItemType = type;
-        restoreDialog.showModal();
+    function openRestoreDialog(channelId, type) {
+      currentChannelId = channelId;
+      currentItemType = type; // Use the passed type directly
+      restoreDialog.showModal();
     }
 
     function closeRestoreDialog() {
-        restoreDialog.close();
-        currentChannelId = null;
-        currentItemType = null;
+      restoreDialog.close();
+      currentChannelId = null;
+      currentItemType = null;
     }
 
     async function restoreToChannel() {
-        const targetChannelId = document.getElementById('targetChannelId').value;
+      const targetChannelId = document.getElementById('targetChannelId').value;
+      
+      if (!targetChannelId) {
+        showToast('Please enter a target channel ID', true);
+        return;
+      }
+
+      try {
+        showToast('Starting restore...');
         
-        if (!targetChannelId) {
-            showToast('Please enter a target channel ID', true);
-            return;
-        }
+        const response = await fetch('/restore-direct', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sourceChannelId: currentChannelId,
+            targetChannelId: targetChannelId,
+            type: currentItemType
+          })
+        });
 
-        try {
-            showToast('Starting restore...');
-            
-            const response = await fetch('/restore-direct', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    sourceChannelId: currentChannelId,
-                    targetChannelId: targetChannelId,
-                    type: currentItemType
-                })
-            });
-
-            const data = await response.json();
-            if (response.ok) {
-                showToast(data.message);
-                closeRestoreDialog();
-            } else {
-                throw new Error(data.error || 'Restore failed');
-            }
-        } catch (error) {
-            showToast(error.message, true);
+        const data = await response.json();
+        if (response.ok) {
+          showToast(data.message);
+          closeRestoreDialog();
+        } else {
+          throw new Error(data.error || 'Restore failed');
         }
+      } catch (error) {
+        showToast(error.message, true);
+      }
     }
   </script>
 </body>

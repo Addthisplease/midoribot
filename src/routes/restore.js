@@ -35,14 +35,14 @@ router.post('/restore-with-webhook', upload.single('backupFile'), async (req, re
 });
 
 router.post('/restore-direct', async (req, res) => {
-    const { sourceChannelId, targetChannelId } = req.body;
+    const { sourceChannelId, targetChannelId, type } = req.body;
 
     if (!sourceChannelId || !targetChannelId) {
         return res.status(400).json({ error: 'Missing source or target channel ID' });
     }
 
     try {
-        const result = await restoreService.restoreDirectMessages(sourceChannelId, targetChannelId);
+        const result = await restoreService.restoreDirectMessages(sourceChannelId, targetChannelId, type);
         res.json(result);
     } catch (error) {
         Logger.error('Direct restore error:', error);

@@ -136,7 +136,7 @@ class RestoreService {
         }
     }
 
-    async restoreDirectMessages(sourceChannelId, targetChannelId) {
+    async restoreDirectMessages(sourceChannelId, targetChannelId, type = 'dm') {
         try {
             // Get source and target channels
             const sourceChannel = await this.client.channels.fetch(sourceChannelId);
@@ -146,7 +146,7 @@ class RestoreService {
                 throw new Error('One or both channels not found');
             }
 
-            Logger.info(`Starting direct restore from ${sourceChannel.id} to ${targetChannel.id}`);
+            Logger.info(`Starting restore from ${type === 'guild' ? 'server' : 'DM'} ${sourceChannel.id} to ${targetChannel.id}`);
             let restoredCount = 0;
             let failedCount = 0;
 
@@ -158,27 +158,106 @@ class RestoreService {
                 });
             }
 
-            // Fetch and process messages
-            const messages = await sourceChannel.messages.fetch({ limit: 100 });
+            // Fetch messages with appropriate limit based on type
+            const fetchLimit = type === 'guild' ? 100 : 50; // Adjust limits as needed
+            const messages = await sourceChannel.messages.fetch({ limit: fetchLimit });
             const sortedMessages = Array.from(messages.values()).sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
             for (const message of sortedMessages) {
                 try {
-                    const messageOptions = {
-                        content: message.content,
-                        files: Array.from(message.attachments.values()).map(att => att.url)
-                    };
+                    // Handle content, attachments, and embeds separately
+                    const hasAttachments = message.attachments.size > 0;
+                    const hasContent = message.content?.trim().length > 0;
+                    const hasEmbeds = message.embeds?.length > 0;
 
                     if (webhook) {
-                        // For server channels, use webhook with author info
-                        await webhook.send({
-                            ...messageOptions,
+                        // For server channels, use webhook
+                        const baseOptions = {
                             username: message.author.username,
-                            avatarURL: message.author.displayAvatarURL()
-                        });
+                            avatarURL: message.author.displayAvatarURL(),
+                            embeds: [] // Initialize embeds array
+                        };
+
+                        // Handle embeds
+                        if (hasEmbeds) {
+                            const validEmbeds = message.embeds.filter(embed => {
+                                // Filter out empty embeds
+                                return embed.data && (
+                                    embed.data.title || 
+                                    embed.data.description || 
+                                    embed.data.fields?.length > 0 ||
+                                    embed.data.image ||
+                                    embed.data.thumbnail
+                                );
+                            });
+
+                            if (validEmbeds.length > 0) {
+                                await webhook.send({
+                                    ...baseOptions,
+                                    embeds: validEmbeds.map(embed => embed.data)
+                                });
+                                await delay(1000);
+                            }
+                        }
+
+                        // Handle content
+                        if (hasContent) {
+                            await webhook.send({
+                                ...baseOptions,
+                                content: message.content
+                            });
+                            await delay(1000);
+                        }
+
+                        // Handle attachments
+                        if (hasAttachments) {
+                            for (const [_, attachment] of message.attachments) {
+                                await webhook.send({
+                                    ...baseOptions,
+                                    files: [attachment.url]
+                                });
+                                await delay(1000);
+                            }
+                        }
                     } else {
                         // For DMs, send directly
-                        await targetChannel.send(messageOptions);
+                        // Handle embeds
+                        if (hasEmbeds) {
+                            const validEmbeds = message.embeds.filter(embed => {
+                                return embed.data && (
+                                    embed.data.title || 
+                                    embed.data.description || 
+                                    embed.data.fields?.length > 0 ||
+                                    embed.data.image ||
+                                    embed.data.thumbnail
+                                );
+                            });
+
+                            if (validEmbeds.length > 0) {
+                                await targetChannel.send({
+                                    embeds: validEmbeds.map(embed => embed.data)
+                                });
+                                await delay(1000);
+                            }
+                        }
+
+                        // Handle content
+                        if (hasContent) {
+                            await targetChannel.send({
+                                content: message.content
+                            });
+                            await delay(1000);
+                        }
+
+                        // Handle attachments
+                        if (hasAttachments) {
+                            for (const [_, attachment] of message.attachments) {
+                                await targetChannel.send({
+                                    files: [attachment.url]
+                                });
+                                await delay(1000);
+                            }
+                        }
                     }
 
                     restoredCount++;
@@ -202,7 +281,7 @@ class RestoreService {
                 message: `Restored ${restoredCount} messages${failedCount > 0 ? `, ${failedCount} failed` : ''}`
             };
         } catch (error) {
-            Logger.error('Direct restore failed:', error);
+            Logger.error('Restore failed:', error);
             throw error;
         }
     }
