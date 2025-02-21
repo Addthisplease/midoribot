@@ -537,13 +537,13 @@
           <form id="serverRestoreForm" class="space-y-4">
             <div class="form-group">
               <label>BACKUP FILE</label>
-              <input type="file" accept=".json" required name="backupFile">
+              <input type="file" accept=".json" required name="backupFile" class="w-full p-2 bg-[#36393f] border border-[#3f4147] rounded text-white">
             </div>
             <div class="form-group">
               <label>TARGET SERVER ID</label>
-              <input type="text" required placeholder="Enter target server ID" name="serverId">
+              <input type="text" required placeholder="Enter target server ID" name="serverId" class="w-full p-2 bg-[#36393f] border border-[#3f4147] rounded text-white">
             </div>
-            <button type="submit" class="restore-button server-restore">
+            <button type="submit" class="restore-button server-restore w-full">
               <i class="fas fa-upload mr-2"></i> RESTORE SERVER
             </button>
           </form>
@@ -552,11 +552,11 @@
           <form id="channelMessagesRestoreForm" class="space-y-4 hidden">
             <div class="form-group">
               <label>BACKUP FILE</label>
-              <input type="file" accept=".json" required name="backupFile">
+              <input type="file" accept=".json" required name="backupFile" class="w-full p-2 bg-[#36393f] border border-[#3f4147] rounded text-white">
             </div>
             <div class="form-group">
               <label>SERVER ID</label>
-              <input type="text" placeholder="Enter server ID" id="serverIdForChannels" onchange="fetchServerChannels(this.value)">
+              <input type="text" placeholder="Enter server ID" id="serverIdForChannels" onchange="fetchServerChannels(this.value)" class="w-full p-2 bg-[#36393f] border border-[#3f4147] rounded text-white">
             </div>
             <div class="form-group">
               <label>TARGET CHANNEL</label>
@@ -564,7 +564,7 @@
                 <option value="">Select a channel</option>
               </select>
             </div>
-            <button type="submit" class="restore-button server-restore">
+            <button type="submit" class="restore-button server-restore w-full">
               <i class="fas fa-upload mr-2"></i> RESTORE MESSAGES
             </button>
           </form>
@@ -893,6 +893,127 @@
       } catch (error) {
         showToast(error.message, true);
       }
+    }
+
+    // Server restore form handler
+    document.getElementById('serverRestoreForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const serverId = formData.get('serverId');
+        const backupFile = formData.get('backupFile');
+
+        if (!serverId || !backupFile) {
+            showToast('Please fill in all required fields', true);
+            return;
+        }
+
+        try {
+            showToast('Starting server restore...');
+            
+            const response = await fetch('/restore-server', {
+                method: 'POST',
+                body: formData // Send the FormData directly
+            });
+
+            const data = await response.json();
+            
+            if (response.ok) {
+                showToast(data.message);
+                // Clear form after successful restore
+                this.reset();
+            } else {
+                throw new Error(data.error || data.details || 'Server restore failed');
+            }
+        } catch (error) {
+            showToast(error.message, true);
+            Logger.error('Server restore error:', error);
+        }
+    });
+
+    // Channel messages restore form handler
+    document.getElementById('channelMessagesRestoreForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const channelId = formData.get('channelId');
+        const backupFile = formData.get('backupFile');
+        const serverId = document.getElementById('serverIdForChannels').value;
+
+        if (!channelId || !backupFile) {
+            showToast('Please fill in all required fields', true);
+            return;
+        }
+
+        try {
+            showToast('Starting message restore...');
+            
+            const response = await fetch('/restore-with-webhook', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            
+            if (response.ok) {
+                showToast(data.message);
+                this.reset();
+            } else {
+                throw new Error(data.error || data.details || 'Message restore failed');
+            }
+        } catch (error) {
+            showToast(error.message, true);
+            Logger.error('Message restore error:', error);
+        }
+    });
+
+    // Function to fetch server channels
+    async function fetchServerChannels(serverId) {
+        if (!serverId) {
+            document.getElementById('channelSelect').innerHTML = '<option value="">Select a channel</option>';
+            document.getElementById('channelSelect').disabled = true;
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/servers/${serverId}/channels`);
+            const channels = await response.json();
+
+            if (response.ok) {
+                const channelSelect = document.getElementById('channelSelect');
+                channelSelect.innerHTML = '<option value="">Select a channel</option>';
+                
+                channels.forEach(channel => {
+                    if (channel.type === 'GUILD_TEXT') {
+                        const option = document.createElement('option');
+                        option.value = channel.id;
+                        option.textContent = '#' + channel.name;
+                        channelSelect.appendChild(option);
+                    }
+                });
+                
+                channelSelect.disabled = false;
+            } else {
+                throw new Error(channels.error || 'Failed to fetch channels');
+            }
+        } catch (error) {
+            showToast('Failed to fetch channels: ' + error.message, true);
+            document.getElementById('channelSelect').disabled = true;
+        }
+    }
+
+    // Function to show toast messages
+    function showToast(message, isError = false) {
+        const toast = document.getElementById('toast');
+        if (!toast) return;
+
+        toast.textContent = message;
+        toast.className = `toast ${isError ? 'error' : ''}`;
+        toast.classList.add('show');
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
     }
   </script>
 </body>
