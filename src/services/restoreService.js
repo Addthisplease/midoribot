@@ -180,18 +180,47 @@ class RestoreService {
                 throw new Error('Source and target channel IDs are required');
             }
 
+            // Validate ID format
+            if (!/^\d+$/.test(sourceChannelId) || !/^\d+$/.test(targetChannelId)) {
+                throw new Error('Invalid channel ID format. IDs must be numeric.');
+            }
+
             Logger.info(`Attempting to fetch channels - Source: ${sourceChannelId}, Target: ${targetChannelId}`);
 
             // Get source and target channels with better error handling
             let sourceChannel;
             if (type === 'dm') {
                 try {
-                    const user = await this.client.users.fetch(sourceChannelId);
-                    sourceChannel = await user.createDM();
+                    // First check if we can fetch the user
+                    let user;
+                    try {
+                        user = await this.client.users.fetch(sourceChannelId, { force: true });
+                    } catch (userError) {
+                        Logger.error(`Failed to fetch user: ${userError.message}`);
+                        throw new Error(`User not found or not accessible (ID: ${sourceChannelId})`);
+                    }
+
+                    if (!user) {
+                        throw new Error(`User not found (ID: ${sourceChannelId})`);
+                    }
+
+                    Logger.info(`Found user: ${user.tag} (${user.id})`);
+
+                    // Then try to create DM channel
+                    try {
+                        sourceChannel = await user.createDM();
+                        if (!sourceChannel) {
+                            throw new Error('Failed to create DM channel');
+                        }
+                    } catch (dmError) {
+                        Logger.error(`Failed to create DM channel: ${dmError.message}`);
+                        throw new Error(`Could not create DM channel with user ${user.tag} (${user.id})`);
+                    }
+
                     Logger.success(`Created/fetched DM channel for user: ${user.tag}`);
                 } catch (error) {
-                    Logger.error(`Failed to fetch/create DM channel: ${error.message}`);
-                    throw new Error(`Could not access DM channel (User ID: ${sourceChannelId})`);
+                    Logger.error(`Failed to setup DM channel: ${error.message}`);
+                    throw new Error(`Could not access DM channel (User ID: ${sourceChannelId}) - ${error.message}`);
                 }
             } else if (type === 'guild') {
                 try {
