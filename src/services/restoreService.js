@@ -189,61 +189,48 @@ class RestoreService {
 
             // Get source and target channels with better error handling
             let sourceChannel;
-            if (type === 'dm') {
+            if (type === 'dm' || type === 'group') {
                 try {
-                    // First check if we can fetch the user
-                    let user;
-                    try {
-                        user = await this.client.users.fetch(sourceChannelId, { force: true });
-                    } catch (userError) {
-                        if (userError.code === 10013) {
-                            const error = new Error(`User not found. The user ID ${sourceChannelId} does not exist on Discord.`);
-                            error.code = 10013;
-                            throw error;
-                        } else if (userError.code === 50001) {
-                            const error = new Error(`Cannot access user. The user may have blocked the bot or has DMs disabled (ID: ${sourceChannelId})`);
-                            error.code = 50001;
-                            throw error;
-                        } else {
-                            const error = new Error(`Failed to fetch user: ${userError.message} (ID: ${sourceChannelId})`);
-                            error.code = userError.code;
-                            throw error;
+                    // For group DMs, we can fetch the channel directly
+                    if (type === 'group') {
+                        try {
+                            sourceChannel = await this.client.channels.fetch(sourceChannelId);
+                            if (!sourceChannel) {
+                                throw new Error('Group channel not found');
+                            }
+                            Logger.success(`Found group channel: ${sourceChannel.name}`);
+                        } catch (error) {
+                            Logger.error(`Failed to fetch group channel: ${error.message}`);
+                            throw new Error(`Could not access group channel (ID: ${sourceChannelId})`);
                         }
+                    } else {
+                        // Existing DM channel code...
+                        let user;
+                        try {
+                            user = await this.client.users.fetch(sourceChannelId, { force: true });
+                        } catch (userError) {
+                            if (userError.code === 10013) {
+                                const error = new Error(`User not found. The user ID ${sourceChannelId} does not exist on Discord.`);
+                                error.code = 10013;
+                                throw error;
+                            } else if (userError.code === 50001) {
+                                const error = new Error(`Cannot access user. The user may have blocked the bot or has DMs disabled (ID: ${sourceChannelId})`);
+                                error.code = 50001;
+                                throw error;
+                            } else {
+                                const error = new Error(`Failed to fetch user: ${userError.message} (ID: ${sourceChannelId})`);
+                                error.code = userError.code;
+                                throw error;
+                            }
+                        }
+
+                        // ... existing DM channel creation code ...
                     }
 
-                    if (!user) {
-                        const error = new Error(`User not found (ID: ${sourceChannelId})`);
-                        error.code = 10013;
-                        throw error;
-                    }
-
-                    Logger.info(`Found user: ${user.tag} (${user.id})`);
-
-                    // Then try to create DM channel
-                    try {
-                        sourceChannel = await user.createDM();
-                        if (!sourceChannel) {
-                            const error = new Error(`Failed to create DM channel with user ${user.tag}. The user may have DMs disabled.`);
-                            error.code = 50007;
-                            throw error;
-                        }
-                    } catch (dmError) {
-                        if (dmError.code === 50007) {
-                            const error = new Error(`Cannot send messages to this user. The user has DMs disabled or has blocked the bot (${user.tag})`);
-                            error.code = 50007;
-                            throw error;
-                        } else {
-                            const error = new Error(`Could not create DM channel with user ${user.tag}: ${dmError.message}`);
-                            error.code = dmError.code || 50001;
-                            throw error;
-                        }
-                    }
-
-                    Logger.success(`Created/fetched DM channel for user: ${user.tag}`);
+                    Logger.success(`Created/fetched ${type} channel`);
                 } catch (error) {
-                    Logger.error(`Failed to setup DM channel: ${error.message}`);
-                    // Preserve error code when rethrowing
-                    const newError = new Error(`Could not access DM channel (User ID: ${sourceChannelId}) - ${error.message}`);
+                    Logger.error(`Failed to setup ${type} channel: ${error.message}`);
+                    const newError = new Error(`Could not access ${type} channel (ID: ${sourceChannelId}) - ${error.message}`);
                     newError.code = error.code;
                     throw newError;
                 }
@@ -260,7 +247,7 @@ class RestoreService {
                     throw new Error(`Could not access server channel (ID: ${sourceChannelId})`);
                 }
             } else {
-                throw new Error(`Invalid channel type: ${type}`);
+                throw new Error(`Invalid channel type: ${type}. Must be 'dm', 'group', or 'guild'`);
             }
 
             // Get target channel
@@ -319,8 +306,7 @@ class RestoreService {
                     allMessages = [...allMessages, ...Array.from(messages.values())];
                     lastId = messages.last().id;
                     
-                    // Add a small delay to avoid rate limits
-                    await delay(1000);
+                    await delay(1000); // Rate limit handling
                 }
 
                 if (allMessages.length === 0) {
@@ -339,13 +325,14 @@ class RestoreService {
                             continue;
                         }
 
-                        // Prepare webhook data
+                        // Prepare webhook data with original sender info
                         const webhookData = {
                             username: message.author.username,
                             avatarURL: message.author.displayAvatarURL(),
-                            content: message.content,
-                            embeds: message.embeds,
-                            files: []
+                            content: message.content || '',
+                            embeds: message.embeds || [],
+                            files: [],
+                            allowedMentions: { parse: [] } // Prevent unwanted pings
                         };
 
                         // Handle attachments
@@ -369,7 +356,7 @@ class RestoreService {
                         // Send message through webhook
                         await webhook.send(webhookData);
                         restoredCount++;
-                        Logger.success(`Restored message ${restoredCount}`);
+                        Logger.success(`Restored message ${restoredCount} from ${webhookData.username}`);
 
                         // Rate limiting
                         await delay(1000);
@@ -411,11 +398,10 @@ class RestoreService {
             }
 
             Logger.info(`Starting restore for server: ${guild.name}`);
-            Logger.info(`Found ${backupData.channels?.length || 0} channels in backup data`);
 
             // Verify bot permissions
             const botMember = await guild.members.fetch(this.client.user.id);
-            const requiredPermissions = ['ManageChannels', 'ManageRoles', 'ManageWebhooks', 'ManageGuild'];
+            const requiredPermissions = ['MANAGE_CHANNELS', 'MANAGE_ROLES', 'MANAGE_WEBHOOKS', 'MANAGE_GUILD'];
             const missingPermissions = requiredPermissions.filter(perm => !botMember.permissions.has(perm));
             
             if (missingPermissions.length > 0) {
@@ -429,471 +415,222 @@ class RestoreService {
                 errors: []
             };
 
-            // Store created channels for message restoration
-            const createdChannels = new Map();
+            // PHASE 1: Restore Roles
+            if (backupData.roles && backupData.roles.length > 0) {
+                Logger.info('=== PHASE 1: Restoring Roles ===');
+                
+                // Delete existing roles if specified
+                if (backupData.clearExistingRoles) {
+                    await Promise.all(guild.roles.cache
+                        .filter(role => role.editable && !role.managed)
+                        .map(role => role.delete()
+                            .catch(error => {
+                                Logger.error(`Failed to delete role ${role.name}:`, error);
+                                progress.errors.push({ type: 'role_deletion', name: role.name, error: error.message });
+                            })
+                        )
+                    );
+                }
 
-            // PHASE 1: Channel Creation
+                // Sort roles by position (highest first)
+                const sortedRoles = backupData.roles
+                    .sort((a, b) => (b.position || 0) - (a.position || 0));
+
+                for (const roleData of sortedRoles) {
+                    try {
+                        if (roleData.managed) continue; // Skip managed roles
+
+                        const role = await guild.roles.create({
+                            name: roleData.name,
+                            color: roleData.color,
+                            hoist: roleData.hoist,
+                            position: roleData.position,
+                            permissions: BigInt(roleData.permissions),
+                            mentionable: roleData.mentionable,
+                            reason: 'Server restore: Role creation'
+                        });
+
+                        progress.rolesRestored++;
+                        Logger.success(`Created role: ${role.name}`);
+                        await delay(1000);
+                    } catch (error) {
+                        Logger.error(`Failed to create role ${roleData.name}:`, error);
+                        progress.errors.push({ type: 'role_creation', name: roleData.name, error: error.message });
+                    }
+                }
+            }
+
+            // PHASE 2: Channel Creation
             if (backupData.channels && backupData.channels.length > 0) {
-                Logger.info('=== PHASE 1: Creating Channels ===');
+                Logger.info('=== PHASE 2: Creating Channels ===');
                 
                 // Delete existing channels if specified
-                await Promise.all(guild.channels.cache
-                    .filter(channel => channel.deletable)
-                    .map(channel => channel.delete()
-                        .catch(error => {
-                            Logger.error(`Failed to delete channel ${channel.name}:`, error);
-                            progress.errors.push({ type: 'channel_deletion', name: channel.name, error: error.message });
-                        })
-                    )
-                );
+                if (backupData.clearExistingChannels) {
+                    await Promise.all(guild.channels.cache
+                        .filter(channel => channel.deletable)
+                        .map(channel => channel.delete()
+                            .catch(error => {
+                                Logger.error(`Failed to delete channel ${channel.name}:`, error);
+                                progress.errors.push({ type: 'channel_deletion', name: channel.name, error: error.message });
+                            })
+                        )
+                    );
+                }
 
-                // First, create categories
-                Logger.info('Creating categories...');
+                // First create categories
+                const categories = new Map();
                 const categoryChannels = backupData.channels
-                    .filter(c => {
-                        // More comprehensive category type checking
-                        const type = (c.type || '').toLowerCase();
-                        return type === 'category' || 
-                               type === 'guild_category' || 
-                               type === '4' || // Discord API category type
-                               c.isCategory; // Backup format support
-                    })
+                    .filter(c => c.type === 'GUILD_CATEGORY' || c.type === 'category')
                     .sort((a, b) => (a.position || 0) - (b.position || 0));
 
-                Logger.info(`Found ${categoryChannels.length} categories to restore`);
-                const categories = new Map();
-
-                // First pass: Create all categories
                 for (const categoryData of categoryChannels) {
                     try {
-                        const categoryName = this.sanitizeChannelName(categoryData.name || 'Unnamed Category');
-                        
-                        Logger.info(`Creating category: ${categoryName}`);
-                        
-                        // Create category with enhanced settings
-                        const category = await guild.channels.create(categoryName, {
-                            type: 4, // Use raw type number for category
+                        const categoryOptions = {
+                            type: 'GUILD_CATEGORY',
                             position: categoryData.position || 0,
-                            permissionOverwrites: categoryData.permissionOverwrites?.map(overwrite => ({
-                                id: overwrite.id,
-                                type: overwrite.type || 'role',
-                                allow: BigInt(overwrite.allow || 0),
-                                deny: BigInt(overwrite.deny || 0)
+                            permissionOverwrites: categoryData.permissionOverwrites?.map(perm => ({
+                                id: perm.id,
+                                type: perm.type || 'role',
+                                allow: BigInt(perm.allow || '0'),
+                                deny: BigInt(perm.deny || '0')
                             })) || [],
-                            reason: `Server restore: Creating category ${categoryName}`
-                        });
+                            reason: 'Server restore: Category creation'
+                        };
 
-                        // Store all possible references
+                        const category = await guild.channels.create(categoryData.name, categoryOptions);
                         categories.set(categoryData.id, category.id);
-                        categories.set(categoryData.name, category.id);
-                        categories.set(categoryName, category.id); // Store sanitized name too
-                        categories.set(`${category.id}_position`, categoryData.position || 0);
-                        
-                        Logger.success(`Created category: ${categoryName} (ID: ${category.id})`);
-                        
-                        // Verify category creation
-                        const createdCategory = await guild.channels.fetch(category.id);
-                        if (!createdCategory) {
-                            throw new Error('Category creation verification failed');
-                        }
-
-                        // Log category details
-                        Logger.info(`Category Details:
-                            Name: ${createdCategory.name}
-                            Position: ${createdCategory.position}
-                            Created At: ${createdCategory.createdAt}
-                            Children Count: ${createdCategory.children?.size || 0}
-                            Permissions: ${createdCategory.permissionOverwrites.cache.size} overwrites
-                        `);
-
-                        await delay(1000); // Rate limit handling
+                        categories.set(categoryData.name, category.id); // Also map by name for flexibility
+                        progress.channelsRestored++;
+                        Logger.success(`Created category: ${category.name}`);
+                        await delay(1000);
                     } catch (error) {
                         Logger.error(`Failed to create category ${categoryData.name}:`, error);
-                        progress.errors.push({ 
-                            type: 'category_creation', 
-                            name: categoryData.name, 
-                            error: error.message 
-                        });
+                        progress.errors.push({ type: 'category_creation', name: categoryData.name, error: error.message });
                     }
                 }
 
-                // Second pass: Update all category positions at once
-                try {
-                    const categoryPositions = Array.from(categories.entries())
-                        .filter(([key]) => key.endsWith('_position'))
-                        .map(([key, position]) => ({
-                            channel: categories.get(key.replace('_position', '')),
-                            position: Math.min(position, 2147483647)
-                        }))
-                        .sort((a, b) => a.position - b.position);
-
-                    if (categoryPositions.length > 0) {
-                        Logger.info(`Updating positions for ${categoryPositions.length} categories`);
-                        
-                        // Process in smaller batches with verification
-                        const batchSize = 10;
-                        for (let i = 0; i < categoryPositions.length; i += batchSize) {
-                            const batch = categoryPositions.slice(i, i + batchSize);
-                            await guild.channels.setPositions(batch);
-                            
-                            // Verify positions
-                            for (const pos of batch) {
-                                const channel = await guild.channels.fetch(pos.channel);
-                                if (channel && channel.position !== pos.position) {
-                                    Logger.warn(`Position mismatch for category ${channel.name}: Expected ${pos.position}, Got ${channel.position}`);
-                                    // Try to fix position individually
-                                    await channel.setPosition(pos.position);
-                                }
-                            }
-                            
-                            await delay(1000);
-                        }
-                        Logger.success('Category positions updated successfully');
-                    }
-                } catch (error) {
-                    Logger.error('Failed to update category positions:', error);
-                    progress.errors.push({ 
-                        type: 'category_position', 
-                        error: error.message 
-                    });
-                }
-
-                // Then create text and voice channels
-                Logger.info('Creating channels...');
+                // Then create other channels
                 const nonCategoryChannels = backupData.channels
-                    .filter(c => c.type !== 'category' && c.type !== 'GUILD_CATEGORY')
+                    .filter(c => c.type !== 'GUILD_CATEGORY' && c.type !== 'category')
                     .sort((a, b) => (a.position || 0) - (b.position || 0));
 
                 for (const channelData of nonCategoryChannels) {
                     try {
-                        // Use original channel name, only remove invalid characters if necessary
-                        let channelName = channelData.name;
-                        if (!channelName) {
-                            channelName = 'unnamed-channel';
-                        } else {
-                            // Only remove characters that Discord doesn't allow in channel names
-                            // Keep emojis and most special characters
-                            channelName = channelName
-                                .replace(/[^a-zA-Z0-9-_\u0020-\u007E\u00A0-\uFFFF]/g, '') // Keep most Unicode chars
-                                .trim();
-                            
-                            // If name becomes empty after sanitization, use a default
-                            if (!channelName) {
-                                channelName = 'unnamed-channel';
+                        // Map channel types
+                        let channelType = channelData.type;
+                        if (typeof channelType === 'string') {
+                            channelType = channelType.toUpperCase();
+                            if (!channelType.startsWith('GUILD_')) {
+                                channelType = `GUILD_${channelType}`;
                             }
                         }
-                        
-                        Logger.info(`Creating channel: ${channelName} (original: ${channelData.name})`);
-                        
-                        // Determine parent category
+
+                        // Find parent category
                         let parentId = null;
                         if (channelData.parentId) {
                             parentId = categories.get(channelData.parentId);
                         } else if (channelData.parent) {
                             parentId = categories.get(channelData.parent);
+                        } else if (channelData.categoryName) {
+                            parentId = categories.get(channelData.categoryName);
                         }
 
-                        // Map channel types
-                        let channelType;
-                        switch(channelData.type?.toLowerCase()) {
-                            case 'text':
-                            case 'guild_text':
-                                channelType = 'GUILD_TEXT';
-                                break;
-                            case 'voice':
-                            case 'guild_voice':
-                                channelType = 'GUILD_VOICE';
-                                break;
-                            case 'category':
-                            case 'guild_category':
-                                channelType = 'GUILD_CATEGORY';
-                                break;
-                            case 'news':
-                            case 'guild_news':
-                                channelType = 'GUILD_NEWS';
-                                break;
-                            case 'store':
-                            case 'guild_store':
-                                channelType = 'GUILD_STORE';
-                                break;
-                            case 'stage':
-                            case 'guild_stage_voice':
-                                channelType = 'GUILD_STAGE_VOICE';
-                                break;
-                            case 'forum':
-                            case 'guild_forum':
-                                channelType = 'GUILD_FORUM';
-                                break;
-                            default:
-                                channelType = 'GUILD_TEXT'; // Fallback to text channel
-                        }
-
-                        // Prepare channel creation options
                         const channelOptions = {
                             type: channelType,
-                            topic: channelData.topic || '',
-                            nsfw: channelData.nsfw || false,
-                            rateLimitPerUser: channelData.rateLimitPerUser || 0,
+                            topic: channelData.topic,
+                            nsfw: channelData.nsfw,
+                            bitrate: channelData.bitrate,
+                            userLimit: channelData.userLimit,
+                            rateLimitPerUser: channelData.rateLimitPerUser,
+                            position: channelData.position,
+                            permissionOverwrites: channelData.permissionOverwrites?.map(perm => ({
+                                id: perm.id,
+                                type: perm.type || 'role',
+                                allow: BigInt(perm.allow || '0'),
+                                deny: BigInt(perm.deny || '0')
+                            })) || [],
                             parent: parentId,
-                            position: channelData.position || 0,
-                            permissionOverwrites: channelData.permissionOverwrites || [],
-                            bitrate: channelData.bitrate, // For voice channels
-                            userLimit: channelData.userLimit, // For voice channels
-                            defaultAutoArchiveDuration: channelData.defaultAutoArchiveDuration || 1440,
-                            defaultThreadRateLimitPerUser: channelData.defaultThreadRateLimitPerUser
+                            reason: 'Server restore: Channel creation'
                         };
 
-                        // Remove undefined options
-                        Object.keys(channelOptions).forEach(key => 
-                            channelOptions[key] === undefined && delete channelOptions[key]
-                        );
+                        const channel = await guild.channels.create(channelData.name, channelOptions);
+                        progress.channelsRestored++;
+                        Logger.success(`Created channel: ${channel.name} ${parentId ? 'in category' : ''}`);
 
-                        const newChannel = await guild.channels.create(channelName, channelOptions);
+                        // Restore messages if present
+                        if (channelData.messages && channelData.messages.length > 0) {
+                            const webhook = await channel.createWebhook('Message Restore', {
+                                avatar: this.client.user.displayAvatarURL()
+                            });
 
-                        // Handle forum-specific settings if it's a forum channel
-                        if (channelType === 'GUILD_FORUM' && channelData.availableTags) {
                             try {
-                                // Set forum-specific settings
-                                await newChannel.setAvailableTags(channelData.availableTags);
-                                
-                                // Set default forum layout
-                                if (channelData.defaultForumLayout) {
-                                    await newChannel.setDefaultForumLayout(channelData.defaultForumLayout);
+                                for (const message of channelData.messages) {
+                                    try {
+                                        await webhook.send({
+                                            content: message.content,
+                                            username: message.author?.username || 'Unknown User',
+                                            avatarURL: message.author?.avatarURL,
+                                            embeds: message.embeds || [],
+                                            files: message.attachments || [],
+                                            allowedMentions: { parse: [] }
+                                        });
+                                        progress.messagesRestored++;
+                                        await delay(1000);
+                                    } catch (error) {
+                                        Logger.error(`Failed to restore message in ${channel.name}:`, error);
+                                    }
                                 }
-                                
-                                // Set default reaction emoji
-                                if (channelData.defaultReactionEmoji) {
-                                    await newChannel.setDefaultReactionEmoji(channelData.defaultReactionEmoji);
-                                }
-                                
-                                // Set default sort order
-                                if (channelData.defaultSortOrder) {
-                                    await newChannel.setDefaultSortOrder(channelData.defaultSortOrder);
-                                }
-
-                                // Set guidelines
-                                if (channelData.guidelines) {
-                                    await newChannel.setGuidelines(channelData.guidelines);
-                                }
-
-                                Logger.success(`Forum settings restored for ${channelName}`);
-                                await delay(1000); // Rate limit handling
-                            } catch (error) {
-                                Logger.error(`Failed to set forum settings for ${channelName}:`, error);
+                            } finally {
+                                await webhook.delete().catch(console.error);
                             }
                         }
 
-                        // Store channel info for message and post restoration
-                        if ((channelType === 'GUILD_TEXT' || channelType === 'GUILD_FORUM') && 
-                            (channelData.messages?.length > 0 || channelData.posts?.length > 0)) {
-                            createdChannels.set(channelName, {
-                                channel: newChannel,
-                                messages: channelData.messages || [],
-                                posts: channelData.posts || [],
-                                type: channelType
-                            });
-                        }
-
-                        progress.channelsRestored++;
-                        Logger.success(`Created channel: ${channelName}`);
                         await delay(1000);
                     } catch (error) {
                         Logger.error(`Failed to create channel ${channelData.name}:`, error);
-                        progress.errors.push({ 
-                            type: 'channel_creation', 
-                            name: channelData.name, 
-                            error: error.message 
-                        });
+                        progress.errors.push({ type: 'channel_creation', name: channelData.name, error: error.message });
                     }
                 }
 
                 // Update channel positions
-                const channelPositions = guild.channels.cache
-                    .filter(channel => channel.type !== 'GUILD_CATEGORY')
-                    .map((channel, index) => ({
-                        channel: channel.id,
-                        position: Math.min(index, 2147483647) // Ensure position stays within int32 bounds
-                    }));
-
                 try {
-                    // Set positions in smaller batches to avoid rate limits
-                    const batchSize = 10;
-                    for (let i = 0; i < channelPositions.length; i += batchSize) {
-                        const batch = channelPositions.slice(i, i + batchSize);
-                        await guild.channels.setPositions(batch);
-                        await delay(1000); // Add delay between batches
+                    // First update category positions
+                    const categoryPositions = Array.from(guild.channels.cache.values())
+                        .filter(channel => channel.type === 'GUILD_CATEGORY')
+                        .sort((a, b) => (a.position || 0) - (b.position || 0))
+                        .map(channel => ({
+                            channel: channel.id,
+                            position: channel.position
+                        }));
+
+                    if (categoryPositions.length > 0) {
+                        await guild.channels.setPositions(categoryPositions);
+                        Logger.success('Updated category positions');
                     }
-                    Logger.success('Channel positions updated successfully');
+
+                    // Then update channel positions within categories
+                    const channelPositions = Array.from(guild.channels.cache.values())
+                        .filter(channel => channel.type !== 'GUILD_CATEGORY')
+                        .sort((a, b) => (a.position || 0) - (b.position || 0))
+                        .map(channel => ({
+                            channel: channel.id,
+                            position: channel.position
+                        }));
+
+                    if (channelPositions.length > 0) {
+                        await guild.channels.setPositions(channelPositions);
+                        Logger.success('Updated channel positions');
+                    }
                 } catch (error) {
                     Logger.error('Failed to update channel positions:', error);
-                    // Continue execution even if position update fails
+                    progress.errors.push({ type: 'position_update', error: error.message });
                 }
-
-                Logger.success('Channel creation completed!');
-
-                // Verify categories and their channels
-                Logger.info('Verifying category structure...');
-                for (const [categoryName, categoryInfo] of categories) {
-                    if (categoryName.endsWith('_position')) continue;
-                    
-                    try {
-                        const category = await guild.channels.fetch(categoryInfo);
-                        if (!category) continue;
-
-                        const children = category.children.cache;
-                        Logger.info(`Category ${category.name}: ${children.size} channels`);
-
-                        // Check if any channels are missing their parent
-                        const missingParent = Array.from(children.values())
-                            .filter(channel => !channel.parent || channel.parent.id !== category.id);
-
-                        if (missingParent.length > 0) {
-                            Logger.warn(`Found ${missingParent.length} channels with incorrect parent in ${category.name}`);
-                            
-                            // Try to fix parent relationships
-                            for (const channel of missingParent) {
-                                try {
-                                    await channel.setParent(category.id, { lockPermissions: false });
-                                    Logger.success(`Fixed parent for channel ${channel.name}`);
-                                    await delay(1000);
-                                } catch (error) {
-                                    Logger.error(`Failed to fix parent for channel ${channel.name}:`, error);
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        Logger.error(`Failed to verify category ${categoryName}:`, error);
-                    }
-                }
-                Logger.success('Category verification completed!');
-            }
-
-            // PHASE 2: Message and Post Restoration
-            if (createdChannels.size > 0) {
-                Logger.info('=== PHASE 2: Restoring Messages and Posts ===');
-                
-                for (const [channelName, channelInfo] of createdChannels) {
-                    const { channel, messages, posts, type } = channelInfo;
-                    
-                    if (type === 'GUILD_FORUM') {
-                        Logger.info(`Restoring forum posts for channel: ${channelName} (${posts.length} posts)`);
-                        
-                        const webhook = await channel.createWebhook('Forum Restore', {
-                            avatar: this.client.user.displayAvatarURL()
-                        });
-
-                        try {
-                            const batchSize = 5; // Smaller batch size for forum posts due to complexity
-                            for (let i = 0; i < posts.length; i += batchSize) {
-                                const postBatch = posts.slice(i, i + batchSize);
-                                Logger.info(`Processing forum post batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(posts.length/batchSize)} for ${channelName}`);
-                                
-                                for (const post of postBatch) {
-                                    try {
-                                        // Create forum post
-                                        const thread = await channel.threads.create({
-                                            name: post.name || 'Restored Post',
-                                            message: {
-                                                content: post.content || '',
-                                                files: post.attachments || [],
-                                                embeds: post.embeds || []
-                                            },
-                                            appliedTags: post.tags || [],
-                                            reason: 'Server restore: Forum post restoration'
-                                        });
-
-                                        // Restore post messages
-                                        if (post.messages?.length > 0) {
-                                            for (const message of post.messages) {
-                                                await webhook.send({
-                                                    threadId: thread.id,
-                                                    content: message.content,
-                                                    username: message.author?.username || 'Unknown User',
-                                                    avatarURL: message.author?.avatarURL,
-                                                    files: message.attachments || [],
-                                                    embeds: message.embeds || []
-                                                });
-                                                await delay(1000);
-                                            }
-                                        }
-
-                                        // Set post metadata
-                                        if (post.pinned) {
-                                            await thread.setLocked(post.locked || false);
-                                            await thread.setArchived(post.archived || false);
-                                            await thread.setPinned(true);
-                                        }
-
-                                        progress.messagesRestored++;
-                                        Logger.success(`Restored forum post: ${post.name}`);
-                                    } catch (error) {
-                                        Logger.error(`Failed to restore forum post: ${error.message}`);
-                                        progress.errors.push({
-                                            type: 'forum_post',
-                                            name: post.name,
-                                            error: error.message
-                                        });
-                                    }
-                                    await delay(2000); // Additional delay between posts
-                                }
-                            }
-                        } finally {
-                            await webhook.delete();
-                            Logger.info(`Completed forum post restore for ${channelName}`);
-                        }
-                    } else if (type === 'GUILD_TEXT' && messages.length > 0) {
-                        Logger.info(`Restoring messages for channel: ${channelName} (${messages.length} messages)`);
-
-                        const webhook = await channel.createWebhook('Message Restore', {
-                            avatar: this.client.user.displayAvatarURL()
-                        });
-
-                        try {
-                            const batchSize = 10;
-                            for (let i = 0; i < messages.length; i += batchSize) {
-                                const messageBatch = messages.slice(i, i + batchSize);
-                                Logger.info(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(messages.length/batchSize)} for ${channelName}`);
-                                
-                                const result = await this.messagePool.executeTask({
-                                    type: 'processMessageBatch',
-                                    data: {
-                                        messages: messageBatch,
-                                        webhook: {
-                                            id: webhook.id,
-                                            token: webhook.token,
-                                            url: webhook.url
-                                        },
-                                        channelId: channel.id
-                                    }
-                                });
-
-                                if (result.error) {
-                                    Logger.error(`Batch error in ${channelName}: ${result.error}`);
-                                    progress.errors.push({
-                                        type: 'message_batch',
-                                        channel: channelName,
-                                        error: result.error
-                                    });
-                                } else {
-                                    progress.messagesRestored += result.results.filter(r => r.success).length;
-                                }
-
-                                await delay(2000);
-                            }
-                        } finally {
-                            await webhook.delete();
-                            Logger.info(`Completed message restore for ${channelName}`);
-                        }
-                    }
-                }
-                Logger.success('Message and post restoration completed!');
             }
 
             return {
                 success: true,
                 progress,
-                message: `Server restored successfully: ${progress.channelsRestored} channels, ${progress.messagesRestored} messages. ${progress.errors.length} errors occurred.`,
-                errors: progress.errors
+                message: `Server restored successfully: ${progress.rolesRestored} roles, ${progress.channelsRestored} channels, ${progress.messagesRestored} messages. ${progress.errors.length} errors occurred.`
             };
         } catch (error) {
             Logger.error('Server restore failed:', error);
