@@ -480,6 +480,7 @@
         }
       } catch (error) {
         showToast(error.message, true);
+        logToConsole(`Restore Error: ${error.message}`, true);
       }
     }
 
@@ -562,8 +563,7 @@
       const data = {
         backupId: formData.get('sourceId'),
         targetId: formData.get('targetId'),
-        type: 'dm',
-        clearServer: false
+        type: 'dm'
       };
 
       try {
