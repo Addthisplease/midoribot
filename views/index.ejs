@@ -1060,26 +1060,30 @@
       e.preventDefault();
       const formData = new FormData(e.target);
       const data = {
-        sourceId: formData.get('sourceId'),
+        backupId: formData.get('sourceId'),
         targetId: formData.get('targetId'),
-        type: 'dm'
+        type: 'dm',
+        clearServer: false
       };
 
       try {
-        const response = await fetch('/api/restore-direct', {
+        showToast('Starting DM restore...');
+        const response = await fetch('/restore', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
 
         const result = await response.json();
-        if (result.success) {
-          showDialog('success', 'DM Restore Successful', result.message);
+        if (response.ok) {
+          showToast(result.message || 'DM restore successful!');
+          e.target.reset();
         } else {
-          showDialog('error', 'DM Restore Failed', result.error || 'Failed to restore DM messages');
+          throw new Error(result.error || 'Failed to restore DM');
         }
       } catch (error) {
-        showDialog('error', 'DM Restore Failed', error.message);
+        showToast(error.message, true);
+        logToConsole(`DM Restore Error: ${error.message}`, true);
       }
     });
 
@@ -1088,30 +1092,30 @@
       e.preventDefault();
       const formData = new FormData(e.target);
       const data = {
-        sourceId: formData.get('sourceId'),
+        backupId: formData.get('sourceId'),
         targetId: formData.get('targetId'),
-        options: {
-          restoreChannels: formData.get('restoreChannels') === 'on',
-          restoreRoles: formData.get('restoreRoles') === 'on',
-          restoreMessages: formData.get('restoreMessages') === 'on'
-        }
+        type: 'guild',
+        clearServer: formData.get('restoreChannels') === 'on'
       };
 
       try {
-        const response = await fetch('/api/restore-server', {
+        showToast('Starting server restore...');
+        const response = await fetch('/restore', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
 
         const result = await response.json();
-        if (result.success) {
-          showDialog('success', 'Server Restore Successful', result.message);
+        if (response.ok) {
+          showToast(result.message || 'Server restore successful!');
+          e.target.reset();
         } else {
-          showDialog('error', 'Server Restore Failed', result.error || 'Failed to restore server');
+          throw new Error(result.error || 'Failed to restore server');
         }
       } catch (error) {
-        showDialog('error', 'Server Restore Failed', error.message);
+        showToast(error.message, true);
+        logToConsole(`Server Restore Error: ${error.message}`, true);
       }
     });
   </script>
