@@ -238,6 +238,158 @@ app.post('/backup-guild', async (req, res) => {
     }
 });
 
+// Add manual restore endpoint
+app.post('/restore', async (req, res) => {
+    try {
+        const { backupId, targetId, type, clearServer } = req.body;
+        const client = discordService.getClient();
+
+        // Validate required fields
+        if (!backupId || !targetId) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Construct backup file path
+        const backupPath = path.join(__dirname, 'backups', `${type}-${backupId}.json`);
+        
+        // Check if backup exists
+        if (!fs.existsSync(backupPath)) {
+            return res.status(404).json({ error: 'Backup file not found' });
+        }
+
+        Logger.info(`Starting ${type} restore...`);
+        Logger.info(`Source: ${backupId}, Target: ${targetId}`);
+
+        if (type === 'dm') {
+            // Handle DM restore
+            try {
+                const targetChannel = await client.channels.fetch(targetId);
+                if (!targetChannel) {
+                    return res.status(404).json({ error: 'Target channel not found' });
+                }
+
+                const backupData = JSON.parse(await fs.promises.readFile(backupPath, 'utf-8'));
+                
+                // Create webhook for the restore
+                const webhook = await targetChannel.createWebhook('Message Restore', {
+                    avatar: client.user.displayAvatarURL()
+                });
+
+                let restoredCount = 0;
+                let failedCount = 0;
+
+                for (const message of backupData) {
+                    try {
+                        await webhook.send({
+                            content: message.content,
+                            username: message.webhookData?.username || message.author,
+                            avatarURL: message.webhookData?.avatarURL,
+                            files: message.attachments?.map(att => ({
+                                attachment: att.url,
+                                name: att.filename || 'attachment'
+                            })) || []
+                        });
+                        restoredCount++;
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit delay
+                    } catch (error) {
+                        Logger.error(`Failed to restore message: ${error.message}`);
+                        failedCount++;
+                    }
+                }
+
+                // Cleanup webhook
+                await webhook.delete().catch(console.error);
+
+                return res.json({
+                    message: `Restored ${restoredCount} messages${failedCount > 0 ? `, ${failedCount} failed` : ''}`,
+                    success: true
+                });
+
+            } catch (error) {
+                Logger.error('DM restore failed:', error);
+                return res.status(500).json({ error: error.message });
+            }
+        } else if (type === 'guild') {
+            // Handle server restore
+            try {
+                const targetGuild = await client.guilds.fetch(targetId);
+                if (!targetGuild) {
+                    return res.status(404).json({ error: 'Target server not found' });
+                }
+
+                const backupData = JSON.parse(await fs.promises.readFile(backupPath, 'utf-8'));
+
+                // Clear existing channels if requested
+                if (clearServer) {
+                    Logger.info('Clearing existing channels...');
+                    await Promise.all(
+                        targetGuild.channels.cache
+                            .filter(channel => channel.deletable)
+                            .map(channel => channel.delete())
+                    );
+                }
+
+                let restoredChannels = 0;
+                let restoredMessages = 0;
+                let failedCount = 0;
+
+                // Restore channels and messages
+                for (const channelData of backupData) {
+                    try {
+                        const channel = await targetGuild.channels.create(channelData.channelName || 'restored-channel', {
+                            type: 'GUILD_TEXT'
+                        });
+
+                        const webhook = await channel.createWebhook('Server Restore', {
+                            avatar: client.user.displayAvatarURL()
+                        });
+
+                        for (const message of channelData.messages || []) {
+                            try {
+                                await webhook.send({
+                                    content: message.content,
+                                    username: message.webhookData?.username || message.author,
+                                    avatarURL: message.webhookData?.avatarURL,
+                                    files: message.attachments?.map(att => ({
+                                        attachment: att.url,
+                                        name: att.filename || 'attachment'
+                                    })) || []
+                                });
+                                restoredMessages++;
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                            } catch (error) {
+                                Logger.error(`Failed to restore message: ${error.message}`);
+                                failedCount++;
+                            }
+                        }
+
+                        await webhook.delete().catch(console.error);
+                        restoredChannels++;
+                    } catch (error) {
+                        Logger.error(`Failed to restore channel: ${error.message}`);
+                        failedCount++;
+                    }
+                }
+
+                return res.json({
+                    message: `Restored ${restoredChannels} channels, ${restoredMessages} messages${failedCount > 0 ? `, ${failedCount} failed` : ''}`,
+                    success: true
+                });
+
+            } catch (error) {
+                Logger.error('Server restore failed:', error);
+                return res.status(500).json({ error: error.message });
+            }
+        } else {
+            return res.status(400).json({ error: 'Invalid restore type' });
+        }
+
+    } catch (error) {
+        Logger.error('Restore failed:', error);
+        return res.status(500).json({ error: error.message });
+    }
+});
+
 // Initialize Server
 async function startServer() {
     try {
