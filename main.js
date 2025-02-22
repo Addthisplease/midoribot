@@ -390,6 +390,70 @@ app.post('/restore', async (req, res) => {
     }
 });
 
+// Add download backup endpoint
+app.get('/download-backup/:backupId', async (req, res) => {
+  try {
+    const { backupId } = req.params;
+    const backupPath = path.join(__dirname, 'backups', `${backupId}.json`);
+    
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+    
+    res.download(backupPath);
+  } catch (error) {
+    Logger.error('Failed to download backup:', error);
+    res.status(500).json({ error: 'Failed to download backup' });
+  }
+});
+
+// Add delete backup endpoint
+app.delete('/delete-backup/:backupId', async (req, res) => {
+  try {
+    const { backupId } = req.params;
+    const backupPath = path.join(__dirname, 'backups', `${backupId}.json`);
+    
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+    
+    await fs.promises.unlink(backupPath);
+    res.json({ message: 'Backup deleted successfully' });
+  } catch (error) {
+    Logger.error('Failed to delete backup:', error);
+    res.status(500).json({ error: 'Failed to delete backup' });
+  }
+});
+
+// Add backup selected DMs endpoint
+app.post('/backup-selected-dms', async (req, res) => {
+  try {
+    const { channelIds } = req.body;
+    if (!channelIds || !Array.isArray(channelIds)) {
+      return res.status(400).json({ error: 'Invalid channel IDs' });
+    }
+
+    const results = [];
+    for (const channelId of channelIds) {
+      try {
+        const channel = await discordService.getClient().channels.fetch(channelId);
+        const result = await backupDMChannel(channel);
+        results.push(result);
+      } catch (error) {
+        Logger.error(`Failed to backup DM ${channelId}:`, error);
+      }
+    }
+
+    res.json({
+      message: `Successfully backed up ${results.length} DMs`,
+      results
+    });
+  } catch (error) {
+    Logger.error('Failed to backup selected DMs:', error);
+    res.status(500).json({ error: 'Failed to backup selected DMs' });
+  }
+});
+
 // Initialize Server
 async function startServer() {
     try {
