@@ -611,6 +611,61 @@
         </div>
       </div>
     </div>
+
+    <!-- Manual Restore Section -->
+    <div class="mt-12">
+      <h2 class="text-xl font-light mb-6 text-white tracking-wide">MANUAL RESTORE</h2>
+      
+      <!-- Manual DM Restore -->
+      <div class="restore-card mb-6">
+        <h3 class="text-lg font-light mb-4 tracking-wide text-[#43b581]">MANUAL DM RESTORE</h3>
+        <form id="manualDMRestoreForm" class="space-y-4">
+          <div class="form-group">
+            <label>SOURCE USER ID</label>
+            <input type="text" required placeholder="Enter source user ID" name="sourceId" class="w-full">
+          </div>
+          <div class="form-group">
+            <label>TARGET CHANNEL ID</label>
+            <input type="text" required placeholder="Enter target channel ID" name="targetId" class="w-full">
+          </div>
+          <button type="submit" class="restore-button dm-restore">
+            <i class="fas fa-sync-alt mr-2"></i> RESTORE DM MANUALLY
+          </button>
+        </form>
+      </div>
+
+      <!-- Manual Server Restore -->
+      <div class="restore-card">
+        <h3 class="text-lg font-light mb-4 tracking-wide text-[#7289da]">MANUAL SERVER RESTORE</h3>
+        <form id="manualServerRestoreForm" class="space-y-4">
+          <div class="form-group">
+            <label>SOURCE SERVER ID</label>
+            <input type="text" required placeholder="Enter source server ID" name="sourceId" class="w-full">
+          </div>
+          <div class="form-group">
+            <label>TARGET SERVER ID</label>
+            <input type="text" required placeholder="Enter target server ID" name="targetId" class="w-full">
+          </div>
+          <div class="space-y-2 mt-4">
+            <div class="flex items-center">
+              <input type="checkbox" id="restoreChannels" name="restoreChannels" checked class="mr-2 bg-[#36393f] border-[#3f4147]">
+              <label for="restoreChannels" class="text-sm text-[#b9bbbe]">Restore Channels</label>
+            </div>
+            <div class="flex items-center">
+              <input type="checkbox" id="restoreRoles" name="restoreRoles" checked class="mr-2 bg-[#36393f] border-[#3f4147]">
+              <label for="restoreRoles" class="text-sm text-[#b9bbbe]">Restore Roles</label>
+            </div>
+            <div class="flex items-center">
+              <input type="checkbox" id="restoreMessages" name="restoreMessages" checked class="mr-2 bg-[#36393f] border-[#3f4147]">
+              <label for="restoreMessages" class="text-sm text-[#b9bbbe]">Restore Messages</label>
+            </div>
+          </div>
+          <button type="submit" class="restore-button server-restore">
+            <i class="fas fa-sync-alt mr-2"></i> RESTORE SERVER MANUALLY
+          </button>
+        </form>
+      </div>
+    </div>
   </div>
 
   <!-- Update the restore dialog -->
@@ -1000,54 +1055,65 @@
         }
     });
 
-    // Function to fetch server channels
-    async function fetchServerChannels(serverId) {
-        if (!serverId) {
-            document.getElementById('channelSelect').innerHTML = '<option value="">Select a channel</option>';
-            document.getElementById('channelSelect').disabled = true;
-            return;
+    // Manual DM Restore Form Handler
+    document.getElementById('manualDMRestoreForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = {
+        sourceId: formData.get('sourceId'),
+        targetId: formData.get('targetId'),
+        type: 'dm'
+      };
+
+      try {
+        const response = await fetch('/api/restore-direct', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          showDialog('success', 'DM Restore Successful', result.message);
+        } else {
+          showDialog('error', 'DM Restore Failed', result.error || 'Failed to restore DM messages');
         }
+      } catch (error) {
+        showDialog('error', 'DM Restore Failed', error.message);
+      }
+    });
 
-        try {
-            const response = await fetch(`/api/servers/${serverId}/channels`);
-            const channels = await response.json();
-
-            if (response.ok) {
-                const channelSelect = document.getElementById('channelSelect');
-                channelSelect.innerHTML = '<option value="">Select a channel</option>';
-                
-                channels.forEach(channel => {
-                    if (channel.type === 'GUILD_TEXT') {
-                        const option = document.createElement('option');
-                        option.value = channel.id;
-                        option.textContent = '#' + channel.name;
-                        channelSelect.appendChild(option);
-                    }
-                });
-                
-                channelSelect.disabled = false;
-            } else {
-                throw new Error(channels.error || 'Failed to fetch channels');
-            }
-        } catch (error) {
-            showToast('Failed to fetch channels: ' + error.message, true);
-            document.getElementById('channelSelect').disabled = true;
+    // Manual Server Restore Form Handler
+    document.getElementById('manualServerRestoreForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = {
+        sourceId: formData.get('sourceId'),
+        targetId: formData.get('targetId'),
+        options: {
+          restoreChannels: formData.get('restoreChannels') === 'on',
+          restoreRoles: formData.get('restoreRoles') === 'on',
+          restoreMessages: formData.get('restoreMessages') === 'on'
         }
-    }
+      };
 
-    // Function to show toast messages
-    function showToast(message, isError = false) {
-        const toast = document.getElementById('toast');
-        if (!toast) return;
+      try {
+        const response = await fetch('/api/restore-server', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
 
-        toast.textContent = message;
-        toast.className = `toast ${isError ? 'error' : ''}`;
-        toast.classList.add('show');
-
-        setTimeout(() => {
-            toast.classList.remove('show');
-        }, 3000);
-    }
+        const result = await response.json();
+        if (result.success) {
+          showDialog('success', 'Server Restore Successful', result.message);
+        } else {
+          showDialog('error', 'Server Restore Failed', result.error || 'Failed to restore server');
+        }
+      } catch (error) {
+        showDialog('error', 'Server Restore Failed', error.message);
+      }
+    });
   </script>
 </body>
 </html>
