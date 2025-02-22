@@ -71,6 +71,38 @@
       border-color: #5865f2;
       outline: none;
     }
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 16px 24px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(100%);
+      transition: all 0.3s ease;
+      z-index: 1000;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    #toast.success {
+      background-color: #3ba55c;
+    }
+    #toast.error {
+      background-color: #ed4245;
+    }
+    .toast-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toast-icon {
+      font-size: 1.2em;
+    }
   </style>
 </head>
 <body class="min-h-screen p-4">
@@ -125,20 +157,15 @@
   </div>
 
   <!-- Toast -->
-  <div id="toast" class="fixed bottom-4 right-4 p-4 rounded-lg text-white opacity-0 transition-opacity duration-300"></div>
+  <div id="toast" class="hidden">
+    <div class="toast-content">
+      <i class="toast-icon"></i>
+      <span class="toast-message"></span>
+    </div>
+  </div>
 
   <script>
     const consoleDiv = document.getElementById('console');
-    const toast = document.getElementById('toast');
-
-    function showToast(message, isError = false) {
-      toast.textContent = message;
-      toast.style.backgroundColor = isError ? '#f04747' : '#3ba55c';
-      toast.style.opacity = '1';
-      setTimeout(() => {
-        toast.style.opacity = '0';
-      }, 3000);
-    }
 
     function logToConsole(message, isError = false) {
       const logEntry = document.createElement('div');
@@ -146,6 +173,24 @@
       logEntry.style.color = isError ? '#ff4444' : '#ffffff';
       consoleDiv.appendChild(logEntry);
       consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    }
+
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      const icon = toast.querySelector('.toast-icon');
+      const messageEl = toast.querySelector('.toast-message');
+      
+      // Set message and icon
+      messageEl.textContent = message;
+      icon.className = 'toast-icon fas ' + (isError ? 'fa-times-circle' : 'fa-check-circle');
+      
+      // Set toast type
+      toast.className = isError ? 'error show' : 'success show';
+      
+      // Hide after 3 seconds
+      setTimeout(() => {
+        toast.className = 'hidden';
+      }, 3000);
     }
 
     async function downloadBackup(backupId) {

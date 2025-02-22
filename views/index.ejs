@@ -20,18 +20,27 @@
       to { opacity: 1; }
     }
     #console {
-      height: 200px;
+      height: 300px;
       overflow-y: auto;
       background-color: #1e1e1e;
       color: #ffffff;
-      padding: 10px;
+      padding: 15px;
       border-radius: 8px;
       font-family: 'Consolas', monospace;
-      border: 1px solid #2d2d2d;
+      border: 1px solid #1f1f1f;
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.5;
     }
+    #console div {
+      margin-bottom: 4px;
+    }
+    #console .success { color: #3ba55c; }
+    #console .error { color: #ed4245; }
+    #console .info { color: #5865f2; }
     .card {
       background-color: #25262b;
-      border: 1px solid #2d2d2d;
+      border: 1px solid #1f1f1f;
       border-radius: 8px;
       transition: all 0.3s ease;
     }
@@ -60,8 +69,8 @@
       background-color: #2d7d46;
     }
     .input-field {
-      background-color: #1e1f22;
-      border: 1px solid #2d2d2d;
+      background-color: #1a1b1e !important;
+      border: 1px solid #1f1f1f;
       color: white;
       padding: 0.5rem;
       border-radius: 4px;
@@ -71,10 +80,139 @@
       border-color: #5865f2;
       outline: none;
     }
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 16px 24px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(100%);
+      transition: all 0.3s ease;
+      z-index: 1000;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    #toast.success {
+      background-color: #3ba55c;
+    }
+    #toast.error {
+      background-color: #ed4245;
+    }
+    .toast-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toast-icon {
+      font-size: 1.2em;
+    }
+    /* Update dialog styling */
+    dialog {
+      background: #313338 !important;
+      color: #ffffff;
+      border: none !important;
+      padding: 0;
+      border-radius: 4px;
+      max-width: 440px !important;
+      width: 90% !important;
+      position: fixed !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      margin: 0 !important;
+      box-shadow: 0 0 0 1px rgba(32,34,37,.6), 0 2px 10px 0 rgba(0,0,0,.2);
+    }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.85);
+    }
+    dialog .input-field {
+      background: #1e1f22 !important;
+      border: none;
+      color: #dbdee1;
+      padding: 10px;
+      border-radius: 3px;
+      font-size: 16px;
+      width: 100%;
+    }
+    dialog .input-field:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(88,101,242,.3);
+    }
+    dialog .input-field::placeholder {
+      color: #949ba4;
+    }
+    dialog label {
+      color: #b5bac1;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      display: block;
+    }
+    dialog p {
+      color: #949ba4;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    dialog .btn {
+      padding: 10px 24px;
+      border-radius: 3px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.17s ease;
+    }
+    dialog .btn-cancel {
+      background: transparent;
+      color: #dbdee1;
+    }
+    dialog .btn-cancel:hover {
+      background: rgba(215,218,222,0.1);
+    }
+    dialog .btn-primary {
+      background: #5865f2;
+    }
+    dialog .btn-primary:hover {
+      background: #4752c4;
+    }
+    input[type="file"] {
+      background: #1a1b1e !important;
+      color: #ffffff;
+      border: 1px solid #1f1f1f;
+      border-radius: 4px;
+      padding: 8px;
+    }
+    input[type="file"]::-webkit-file-upload-button {
+      background: #5865f2;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    input[type="file"]::-webkit-file-upload-button:hover {
+      background: #4752c4;
+    }
   </style>
 </head>
 <body class="min-h-screen p-4">
   <div class="container mx-auto max-w-6xl">
+    <!-- Console Section -->
+    <div class="mb-8">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-xl font-medium">Console</h2>
+        <button onclick="clearConsole()" class="text-sm text-gray-400 hover:text-white">
+          <i class="fas fa-trash-alt mr-1"></i> Clear
+        </button>
+      </div>
+      <div id="console" class="bg-[#1e1e1e] text-white p-4 rounded-lg border border-[#2d2d2d] h-[300px] overflow-y-auto font-mono text-sm leading-relaxed"></div>
+    </div>
+
     <!-- Header -->
     <div class="flex justify-between items-center mb-8">
       <h1 class="text-2xl font-bold">Backup Manager</h1>
@@ -121,14 +259,29 @@
       <% }) %>
     </div>
 
-    <!-- Console Section -->
-    <div class="mb-8">
-      <h2 class="text-xl font-medium mb-3">Console</h2>
-      <div id="console"></div>
-    </div>
-
     <!-- Manual Restore Section -->
     <div class="grid md:grid-cols-2 gap-6">
+      <!-- Upload Backup -->
+      <div class="card p-4">
+        <h3 class="text-lg font-medium mb-4">Upload Backup</h3>
+        <form id="uploadRestoreForm" class="space-y-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Backup File</label>
+            <input type="file" name="backupFile" accept=".json" required 
+                   class="input-field bg-[#1e1f22] text-white p-2 rounded w-full">
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Target Channel ID</label>
+            <input type="text" name="targetId" required placeholder="Enter target channel ID" 
+                   class="input-field">
+            <p class="text-sm text-gray-400 mt-1">Channel where messages will be restored</p>
+          </div>
+          <button type="submit" class="btn btn-primary w-full">
+            <i class="fas fa-upload mr-2"></i> Upload & Restore
+          </button>
+        </form>
+      </div>
+
       <!-- DM Restore -->
       <div class="card p-4">
         <h3 class="text-lg font-medium mb-4">Manual DM Restore</h3>
@@ -174,22 +327,41 @@
   </div>
 
   <!-- Restore Dialog -->
-  <dialog id="restoreDialog" class="bg-[#25262b] text-white p-0 rounded-lg border border-[#2d2d2d] w-full max-w-md">
-    <div class="p-4 border-b border-[#2d2d2d]">
-      <h3 class="text-lg font-medium">Restore Backup</h3>
+  <dialog id="restoreDialog" class="w-full max-w-md">
+    <div class="p-4 border-b border-[#1f1f1f] bg-[#2b2d31]">
+      <h3 class="text-[#f2f3f5] text-base font-semibold">Restore Backup</h3>
     </div>
-    <div class="p-4">
-      <label class="block text-sm text-gray-400 mb-1">Target ID</label>
-      <input type="text" id="targetChannelId" placeholder="Enter target ID" class="input-field">
+    <div class="p-4 bg-[#313338]">
+      <div class="mb-4">
+        <label class="block mb-2">Target ID</label>
+        <input type="text" id="targetChannelId" placeholder="Enter target ID" class="input-field">
+        <p>
+          For DM restore: Enter the target channel ID<br>
+          For Server restore: Enter the target server ID
+        </p>
+      </div>
+      <div id="restoreProgress" class="hidden">
+        <div class="flex items-center gap-2 text-sm text-[#b5bac1]">
+          <i class="fas fa-spinner fa-spin"></i>
+          <span id="restoreStatus">Restoring...</span>
+        </div>
+      </div>
     </div>
-    <div class="p-4 border-t border-[#2d2d2d] flex justify-end gap-3">
-      <button onclick="closeRestoreDialog()" class="btn text-gray-400 hover:text-white">Cancel</button>
-      <button onclick="restoreToChannel()" class="btn btn-primary">Restore</button>
+    <div class="p-4 bg-[#2b2d31] flex justify-end gap-3">
+      <button onclick="closeRestoreDialog()" class="btn btn-cancel">Cancel</button>
+      <button onclick="restoreToChannel()" id="restoreButton" class="btn btn-primary">
+        <i class="fas fa-upload mr-2"></i>Restore
+      </button>
     </div>
   </dialog>
 
   <!-- Toast -->
-  <div id="toast" class="fixed bottom-4 right-4 p-4 rounded-lg text-white opacity-0 transition-opacity duration-300"></div>
+  <div id="toast" class="hidden">
+    <div class="toast-content">
+      <i class="toast-icon"></i>
+      <span class="toast-message"></span>
+    </div>
+  </div>
 
   <script>
     const consoleDiv = document.getElementById('console');
@@ -202,13 +374,39 @@
     let currentChannelId = null;
     const restoreDialog = document.getElementById('restoreDialog');
     let currentItemType = null;
+    const maxLogEntries = 1000; // Maximum number of log entries to keep
 
-    function logToConsole(message, isError = false) {
+    function logToConsole(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
       const logEntry = document.createElement('div');
-      logEntry.textContent = message;
-      logEntry.style.color = isError ? '#ff4444' : '#ffffff';
+      logEntry.className = `log-entry ${type} mb-1`;
+      
+      // Color coding based on message type
+      const colors = {
+        info: '#5865f2',    // Discord blue
+        success: '#3ba55c', // Green
+        error: '#ed4245',   // Red
+        warning: '#faa61a'  // Yellow
+      };
+
+      // Format the log entry with timestamp and appropriate color
+      logEntry.innerHTML = `<span class="text-gray-500">[${timestamp}]</span> <span style="color: ${colors[type]}">${message}</span>`;
+      
+      // Add the new log entry
       consoleDiv.appendChild(logEntry);
-      consoleDiv.scrollTop = consoleDiv.scrollHeight; // Auto-scroll to bottom
+      
+      // Auto-scroll to bottom
+      consoleDiv.scrollTop = consoleDiv.scrollHeight;
+      
+      // Trim old entries if exceeding maxLogEntries
+      while (consoleDiv.children.length > maxLogEntries) {
+        consoleDiv.removeChild(consoleDiv.firstChild);
+      }
+    }
+
+    function clearConsole() {
+      consoleDiv.innerHTML = '';
+      logToConsole('Console cleared', 'info');
     }
 
     function openRestoreModal(backupId, type) {
@@ -223,12 +421,14 @@
 
     function showToast(message, isError = false) {
       const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.className = `toast ${isError ? 'error' : ''}`;
+      const icon = toast.querySelector('.toast-icon');
+      const messageEl = toast.querySelector('.toast-message');
       
-      // Force reflow
-      toast.offsetHeight;
+      // Set message and icon
+      messageEl.textContent = message;
+      icon.className = 'toast-icon fas ' + (isError ? 'fa-times-circle' : 'fa-check-circle');
       
+      // Set toast type
       toast.classList.add('show');
       setTimeout(() => {
         toast.classList.remove('show');
@@ -238,27 +438,33 @@
     async function backupItem(id, type) {
       try {
         const endpoint = type === 'dm' ? '/backup-dm' : '/backup-guild';
-        const payload = type === 'dm' ? 
-          { channelId: id } : 
-          { serverId: id };
+        const payload = type === 'dm' ? { channelId: id } : { serverId: id };
+        const entityType = type === 'dm' ? 'DM' : 'server';
 
-        showToast(`Starting ${type === 'dm' ? 'DM' : 'server'} backup...`);
+        logToConsole(`Starting ${entityType} backup for ID: ${id}...`, 'info');
 
         const response = await fetch(endpoint, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
         const data = await response.json();
+        
         if (response.ok) {
+          logToConsole(`✓ ${entityType} backup completed successfully!`, 'success');
+          if (data.details) {
+            const { totalMessages, skippedChannels, channelsProcessed } = data.details;
+            if (type === 'guild') {
+              logToConsole(`└─ Messages: ${totalMessages}, Channels: ${channelsProcessed}${skippedChannels > 0 ? `, Skipped: ${skippedChannels}` : ''}`, 'info');
+            }
+          }
           showToast(data.message || 'Backup completed successfully!');
         } else {
           throw new Error(data.error || 'Backup failed');
         }
       } catch (error) {
+        logToConsole(`✗ Backup failed: ${error.message}`, 'error');
         showToast(error.message, true);
       }
     }
@@ -443,6 +649,15 @@
     }
 
     function closeRestoreDialog() {
+      const restoreButton = document.getElementById('restoreButton');
+      const restoreProgress = document.getElementById('restoreProgress');
+      const targetChannelId = document.getElementById('targetChannelId');
+      
+      // Reset dialog state
+      restoreButton.disabled = false;
+      restoreProgress.classList.add('hidden');
+      targetChannelId.value = '';
+      
       restoreDialog.close();
       currentChannelId = null;
       currentItemType = null;
@@ -450,15 +665,24 @@
 
     async function restoreToChannel() {
       const targetChannelId = document.getElementById('targetChannelId').value;
+      const restoreButton = document.getElementById('restoreButton');
+      const restoreProgress = document.getElementById('restoreProgress');
+      const restoreStatus = document.getElementById('restoreStatus');
       
       if (!targetChannelId) {
         showToast('Please enter a target channel ID', true);
+        logToConsole('Error: Missing target channel ID', 'error');
         return;
       }
 
       try {
-        showToast('Starting restore...');
-        logToConsole(`Starting restore from ${currentItemType} ${currentChannelId} to ${targetChannelId}...`);
+        restoreButton.disabled = true;
+        restoreProgress.classList.remove('hidden');
+        restoreStatus.textContent = 'Starting restore...';
+        
+        logToConsole('Starting restore process...', 'info');
+        logToConsole(`Source: ${currentItemType} ${currentChannelId}`, 'info');
+        logToConsole(`Target: ${targetChannelId}`, 'info');
         
         const response = await fetch('/restore', {
           method: 'POST',
@@ -468,22 +692,33 @@
           body: JSON.stringify({
             backupId: currentChannelId,
             targetId: targetChannelId,
-            type: currentItemType,
-            clearServer: currentItemType === 'guild' ? document.getElementById('clearServer').checked : false
+            type: currentItemType
           })
         });
 
         const data = await response.json();
         if (response.ok) {
+          restoreStatus.textContent = 'Restore completed successfully!';
           showToast(data.message);
-          logToConsole(data.message);
-          closeRestoreDialog();
+          logToConsole(data.message, 'success');
+          
+          setTimeout(() => {
+            closeRestoreDialog();
+          }, 1500);
         } else {
           throw new Error(data.error || 'Restore failed');
         }
       } catch (error) {
+        restoreStatus.textContent = `Error: ${error.message}`;
         showToast(error.message, true);
-        logToConsole(`Restore Error: ${error.message}`, true);
+        logToConsole(`Restore Error: ${error.message}`, 'error');
+      } finally {
+        if (restoreStatus.textContent.startsWith('Error:')) {
+          setTimeout(() => {
+            restoreProgress.classList.add('hidden');
+          }, 3000);
+        }
+        restoreButton.disabled = false;
       }
     }
 
@@ -625,6 +860,41 @@
       } catch (error) {
         showToast(error.message, true);
         logToConsole(`Server Restore Error: ${error.message}`, true);
+      }
+    });
+
+    // Add upload form handler
+    document.getElementById('uploadRestoreForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const targetId = formData.get('targetId');
+      const file = formData.get('backupFile');
+
+      if (!targetId || !file) {
+        showToast('Please fill in all required fields', true);
+        return;
+      }
+
+      try {
+        showToast('Starting restore from uploaded file...');
+        logToConsole('Starting restore from uploaded file...');
+
+        const response = await fetch('/restore-with-webhook', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+          showToast(result.message || 'Restore completed successfully!');
+          logToConsole(result.message || 'Restore completed successfully!');
+          e.target.reset();
+        } else {
+          throw new Error(result.error || 'Failed to restore from uploaded file');
+        }
+      } catch (error) {
+        showToast(error.message, true);
+        logToConsole(`Restore Error: ${error.message}`, true);
       }
     });
   </script>

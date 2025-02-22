@@ -9,6 +9,7 @@ const config = require('./src/config/config');
 const { Worker } = require('worker_threads');
 const WorkerPool = require('./workerPool');
 const fs = require('fs');
+const upload = require('./src/utils/upload');
 
 const app = express();
 
@@ -67,21 +68,25 @@ app.get('/', async (req, res) => {
 async function backupDMChannel(channel) {
     try {
         const messages = await channel.messages.fetch({ limit: 100 });
-        const backupData = messages.map(msg => ({
-            author: msg.author.username,
-            content: msg.content,
-            attachments: msg.attachments.map(att => ({
-                url: att.url,
-                filename: att.name,
-            })),
-            timestamp: msg.createdTimestamp,
-            webhookData: {
-                username: msg.author.username,
-                avatarURL: msg.author.avatar ? 
-                    `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
-                    'https://cdn.discordapp.com/embed/avatars/0.png'
-            }
-        }));
+        const backupData = {
+            type: 'dm',
+            channelId: channel.id,
+            messages: messages.map(msg => ({
+                author: msg.author.username,
+                content: msg.content,
+                attachments: msg.attachments.map(att => ({
+                    url: att.url,
+                    filename: att.name,
+                })),
+                timestamp: msg.createdTimestamp,
+                webhookData: {
+                    username: msg.author.username,
+                    avatarURL: msg.author.avatar ? 
+                        `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}` : 
+                        'https://cdn.discordapp.com/embed/avatars/0.png'
+                }
+            }))
+        };
 
         // Ensure backup directory exists
         const backupDir = path.join(__dirname, 'backups');
@@ -89,8 +94,9 @@ async function backupDMChannel(channel) {
             fs.mkdirSync(backupDir, { recursive: true });
         }
 
-        // Generate backup ID using timestamp
-        const backupId = `backup-${Date.now()}`;
+        // Generate backup ID using consistent format
+        const timestamp = Date.now();
+        const backupId = `backup-dm-${channel.id}-${timestamp}`;
         const backupFilePath = path.join(backupDir, `${backupId}.json`);
         
         // Save the backup
@@ -116,16 +122,27 @@ app.post('/backup-dm', async (req, res) => {
         const channel = await discordService.getClient().channels.fetch(channelId);
         
         if (!channel) {
+            Logger.error(`Channel not found: ${channelId}`);
             return res.status(404).json({ error: 'Channel not found' });
         }
 
+        Logger.info(`Starting DM backup for channel: ${channel.id} (${channel.recipient?.username || 'Unknown User'})`);
+        
         const result = await backupDMChannel(channel);
+        Logger.success(`DM backup completed: ${result.path}`);
+        
         res.json({
             message: 'DM backup created successfully',
-            success: true
+            success: true,
+            details: {
+                channelId: channel.id,
+                recipientName: channel.recipient?.username || 'Unknown User',
+                backupPath: result.path,
+                timestamp: new Date().toISOString()
+            }
         });
     } catch (error) {
-        Logger.error('Backup error:', error);
+        Logger.error('DM Backup error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -142,17 +159,18 @@ app.get('/download/:backupId', (req, res) => {
     res.download(backupPath);
 });
 
-// Add this route for server backups
+// Update the backup-guild route
 app.post('/backup-guild', async (req, res) => {
     try {
         const { serverId } = req.body;
         const server = await discordService.getClient().guilds.fetch(serverId);
         
         if (!server) {
+            Logger.error(`Server not found: ${serverId}`);
             return res.status(404).json({ error: 'Server not found' });
         }
 
-        Logger.info(`Starting backup for server: ${server.name}`);
+        Logger.info(`Starting backup for server: ${server.name} (${server.id})`);
 
         // Get all text channels that we have access to
         const channels = server.channels.cache.filter(channel => 
@@ -162,13 +180,21 @@ app.post('/backup-guild', async (req, res) => {
 
         let totalMessages = 0;
         let skippedChannels = 0;
-        const backupData = [];
+        let processedChannels = 0;
+        const backupData = {
+            type: 'guild',
+            serverId: server.id,
+            serverName: server.name,
+            channels: []
+        };
+
+        Logger.info(`Found ${channels.size} accessible channels`);
 
         for (const [_, channel] of channels) {
             try {
-                Logger.info(`Backing up channel #${channel.name}...`);
+                Logger.info(`Processing channel #${channel.name}...`);
                 const messages = await channel.messages.fetch({ limit: 100 }).catch(error => {
-                    Logger.warn(`Skipping channel #${channel.name} - No access`);
+                    Logger.warn(`Skipping channel #${channel.name} - ${error.message}`);
                     skippedChannels++;
                     return null;
                 });
@@ -183,24 +209,29 @@ app.post('/backup-guild', async (req, res) => {
                         name: att.name
                     })),
                     timestamp: msg.createdTimestamp,
-                    channelId: channel.id,
-                    channelName: channel.name,
                     webhookData: {
                         username: msg.author.username,
                         avatarURL: msg.author.displayAvatarURL()
                     }
                 }));
 
-                backupData.push(...channelMessages);
+                backupData.channels.push({
+                    id: channel.id,
+                    name: channel.name,
+                    messages: channelMessages
+                });
+
                 totalMessages += messages.size;
-                Logger.success(`Backed up ${messages.size} messages from #${channel.name}`);
+                processedChannels++;
+                Logger.success(`✓ Channel #${channel.name}: ${messages.size} messages backed up`);
             } catch (error) {
                 Logger.error(`Failed to backup channel #${channel.name}:`, error);
                 skippedChannels++;
             }
         }
 
-        if (backupData.length === 0) {
+        if (totalMessages === 0) {
+            Logger.error('No messages could be backed up');
             return res.status(400).json({ 
                 error: 'No messages could be backed up. Check bot permissions.' 
             });
@@ -212,13 +243,17 @@ app.post('/backup-guild', async (req, res) => {
             fs.mkdirSync(backupDir, { recursive: true });
         }
 
-        const backupId = `server-${server.id}-${Date.now()}`;
+        const timestamp = Date.now();
+        const backupId = `backup-guild-${server.id}-${timestamp}`;
         const backupPath = path.join(backupDir, `${backupId}.json`);
         
         await fs.promises.writeFile(backupPath, JSON.stringify(backupData, null, 2));
+        Logger.success(`Server backup saved to: ${backupPath}`);
 
-        const summary = `Server backup completed: ${totalMessages} messages backed up` + 
+        const summary = `Server backup completed: ${totalMessages} messages backed up from ${processedChannels} channels` + 
                        (skippedChannels > 0 ? ` (${skippedChannels} channels skipped)` : '');
+        
+        Logger.success(summary);
 
         res.json({
             message: summary,
@@ -227,7 +262,10 @@ app.post('/backup-guild', async (req, res) => {
             details: {
                 totalMessages,
                 skippedChannels,
-                channelsProcessed: channels.size - skippedChannels
+                channelsProcessed: processedChannels,
+                serverName: server.name,
+                backupPath,
+                timestamp: new Date().toISOString()
             }
         });
     } catch (error) {
@@ -240,111 +278,274 @@ app.post('/backup-guild', async (req, res) => {
 
 // Add manual restore endpoint
 app.post('/restore', async (req, res) => {
-  const { backupId, targetId, type, clearServer } = req.body;
+  const { backupId, targetId, type } = req.body;
 
   if (!backupId || !targetId || !type) {
     return res.status(400).json({ error: 'Missing backupId, targetId, or type' });
   }
 
-  const backupFilePath = path.join(__dirname, 'backups', `backup-${type}-${backupId}.json`);
-  if (!fs.existsSync(backupFilePath)) {
-    return res.status(404).json({ error: 'Backup file not found' });
-  }
-
   try {
-    if (type === 'guild') {
-      await restoreGuild(backupFilePath, targetId, clearServer);
-      res.status(200).json({ message: 'Guild restore successful!' });
-    } else if (type === 'dm') {
-      await restoreDM(backupFilePath, targetId);
-      res.status(200).json({ message: 'DM restore successful!' });
+    // Validate target channel/server first
+    const client = discordService.getClient();
+    let targetEntity;
+
+    try {
+      if (type === 'dm') {
+        // For DMs, first try to fetch the channel
+        targetEntity = await client.channels.fetch(targetId).catch(async () => {
+          // If channel fetch fails, try to create a DM channel with the user
+          const user = await client.users.fetch(targetId);
+          return await user.createDM();
+        });
+
+        if (!targetEntity) {
+          return res.status(404).json({ 
+            error: 'Target channel not found or inaccessible',
+            details: 'Could not find or create DM channel with the specified ID'
+          });
+        }
+
+        // Check if bot can send messages to this channel
+        if (!targetEntity.permissionsFor(client.user)?.has(['SEND_MESSAGES', 'MANAGE_WEBHOOKS'])) {
+          return res.status(403).json({ 
+            error: 'Insufficient permissions',
+            details: 'Bot needs SEND_MESSAGES and MANAGE_WEBHOOKS permissions in the target channel'
+          });
+        }
+      } else if (type === 'guild') {
+        targetEntity = await client.guilds.fetch(targetId);
+        if (!targetEntity) {
+          return res.status(404).json({ 
+            error: 'Target server not found',
+            details: 'Could not find the specified server'
+          });
+        }
+
+        // Check if bot has required permissions in the server
+        const botMember = await targetEntity.members.fetch(client.user.id);
+        if (!botMember.permissions.has(['MANAGE_CHANNELS', 'MANAGE_WEBHOOKS'])) {
+          return res.status(403).json({ 
+            error: 'Insufficient permissions',
+            details: 'Bot needs MANAGE_CHANNELS and MANAGE_WEBHOOKS permissions in the target server'
+          });
+        }
+      } else {
+        return res.status(400).json({ error: 'Invalid restore type. Must be "dm" or "guild"' });
+      }
+    } catch (error) {
+      Logger.error('Failed to validate target:', error);
+      return res.status(404).json({ 
+        error: 'Target validation failed',
+        details: error.message
+      });
+    }
+
+    // List all files in the backups directory
+    const backupDir = path.join(__dirname, 'backups');
+    const files = await fs.promises.readdir(backupDir);
+    
+    // Find a matching backup file
+    const backupFile = files.find(file => 
+      file.includes(backupId) || // Match by ID
+      file.includes(`backup-${type}`) || // Match by type
+      file.includes(`server-${backupId}`) // Match server backups
+    );
+
+    if (!backupFile) {
+      Logger.error('No matching backup file found in directory. Available files:', files);
+      return res.status(404).json({ 
+        error: 'Backup file not found',
+        details: {
+          availableFiles: files,
+          searchedFor: backupId
+        }
+      });
+    }
+
+    const backupFilePath = path.join(backupDir, backupFile);
+    Logger.success(`Found backup file: ${backupFilePath}`);
+
+    // Read and parse backup data
+    let backupData;
+    try {
+      const fileContent = await fs.promises.readFile(backupFilePath, 'utf8');
+      Logger.info('Successfully read backup file');
+      
+      try {
+        backupData = JSON.parse(fileContent);
+        Logger.info('Successfully parsed backup data');
+      } catch (parseError) {
+        Logger.error('Failed to parse backup file:', parseError);
+        return res.status(400).json({ 
+          error: 'Invalid backup file format: Failed to parse JSON',
+          details: parseError.message
+        });
+      }
+    } catch (readError) {
+      Logger.error('Failed to read backup file:', readError);
+      return res.status(500).json({ 
+        error: 'Failed to read backup file',
+        details: readError.message
+      });
+    }
+
+    // Handle different backup data formats
+    if (Array.isArray(backupData)) {
+      backupData = { messages: backupData };
+    } else if (typeof backupData === 'object') {
+      // If it's a DM backup
+      if (backupData.type === 'dm' && backupData.messages) {
+        // Already in correct format
+      }
+      // If it's a guild backup
+      else if (backupData.type === 'guild' && backupData.channels) {
+        backupData = {
+          messages: backupData.channels.flatMap(channel => channel.messages || [])
+        };
+      }
+      // If neither messages nor channels exist, check if it's a single message
+      else if (!backupData.messages && !backupData.channels) {
+        if (backupData.content || backupData.author) {
+          backupData = { messages: [backupData] };
+        } else {
+          return res.status(400).json({ 
+            error: 'Invalid backup data format',
+            details: 'Backup file does not contain any valid message data'
+          });
+        }
+      }
     } else {
-      res.status(400).json({ error: 'Invalid restore type' });
+      return res.status(400).json({ 
+        error: 'Invalid backup data format',
+        details: 'Backup data must be an array of messages or a valid backup object'
+      });
+    }
+
+    // Validate that we have messages to restore
+    if (!backupData.messages || !Array.isArray(backupData.messages) || backupData.messages.length === 0) {
+      return res.status(400).json({ 
+        error: 'No messages to restore',
+        details: 'The backup file contains no valid messages'
+      });
+    }
+
+    Logger.info(`Found ${backupData.messages.length} messages to restore`);
+
+    if (type === 'guild') {
+      // Get target guild
+      const guild = await discordService.getClient().guilds.fetch(targetId);
+      if (!guild) {
+        return res.status(404).json({ error: 'Target server not found' });
+      }
+
+      // Check bot permissions
+      const botMember = await guild.members.fetch(discordService.getClient().user.id);
+      if (!botMember.permissions.has(['MANAGE_CHANNELS', 'MANAGE_WEBHOOKS'])) {
+        return res.status(403).json({ error: 'Bot lacks required permissions in target server' });
+      }
+
+      // Restore server
+      const result = await restoreGuild(backupData, targetId);
+      res.status(200).json({ message: result.message });
+    } else if (type === 'dm') {
+      // Get target channel
+      const channel = await discordService.getClient().channels.fetch(targetId);
+      if (!channel) {
+        return res.status(404).json({ error: 'Target channel not found' });
+      }
+
+      // Check bot permissions
+      if (!channel.permissionsFor(discordService.getClient().user.id).has(['SEND_MESSAGES', 'MANAGE_WEBHOOKS'])) {
+        return res.status(403).json({ error: 'Bot lacks required permissions in target channel' });
+      }
+
+      // Create webhook
+      let webhook = null;
+      try {
+        webhook = await channel.createWebhook('Message Restore', {
+          avatar: discordService.getClient().user.displayAvatarURL()
+        });
+      } catch (error) {
+        return res.status(500).json({ error: 'Failed to create webhook' });
+      }
+
+      try {
+        // Sort messages by timestamp
+        const messages = backupData.messages.sort((a, b) => a.timestamp - b.timestamp);
+        let restoredCount = 0;
+        let failedCount = 0;
+
+        // Restore messages with rate limiting
+        for (const message of messages) {
+          try {
+            // Send message content
+            if (message.content?.trim()) {
+              await webhook.send({
+                content: message.content,
+                username: message.author || 'Unknown User',
+                avatarURL: message.webhookData?.avatarURL
+              });
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit between messages
+            }
+
+            // Send attachments
+            if (message.attachments?.length > 0) {
+              for (const attachment of message.attachments) {
+                try {
+                  await webhook.send({
+                    files: [{
+                      attachment: attachment.url,
+                      name: attachment.filename || attachment.name || 'attachment'
+                    }],
+                    username: message.author || 'Unknown User',
+                    avatarURL: message.webhookData?.avatarURL
+                  });
+                  await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit between attachments
+                } catch (attachError) {
+                  Logger.error(`Failed to restore attachment: ${attachError.message}`);
+                }
+              }
+            }
+
+            restoredCount++;
+            Logger.success(`Restored message ${restoredCount}`);
+          } catch (messageError) {
+            Logger.error(`Failed to restore message: ${messageError.message}`);
+            failedCount++;
+
+            // Stop if too many consecutive failures
+            if (failedCount > 5) {
+              throw new Error('Too many consecutive failures, stopping restore');
+            }
+          }
+        }
+
+        res.status(200).json({
+          message: `Restored ${restoredCount} messages${failedCount > 0 ? ` (${failedCount} failed)` : ''}`
+        });
+      } finally {
+        // Always clean up webhook
+        if (webhook) {
+          try {
+            await webhook.delete();
+          } catch (error) {
+            Logger.error('Failed to delete webhook:', error);
+          }
+        }
+      }
+    } else {
+      return res.status(400).json({ error: 'Invalid restore type' });
     }
   } catch (error) {
-    Logger.error('Error while restoring:', error.message);
+    Logger.error('Restore failed:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-async function restoreDM(backupFilePath, targetChannelId) {
-  try {
-    const channel = await discordService.getClient().channels.fetch(targetChannelId);
-    if (!channel) {
-      throw new Error('Channel not found');
-    }
-
-    const backupData = JSON.parse(await fs.promises.readFile(backupFilePath, 'utf-8'));
-    backupData.messages.reverse();
-    let webhook;
-    const webhooks = await channel.fetchWebhooks();
-    if (webhooks.size > 0) {
-      webhook = webhooks.first();
-      Logger.info(`Using existing webhook: ${webhook.name}`);
-    } else {
-      webhook = await channel.createWebhook('Restore Bot', {
-        avatar: discordService.getClient().user.displayAvatarURL()
-      });
-      Logger.info(`Created new webhook: ${webhook.name}`);
-    }
-
-    let restoredCount = 0;
-    let failedCount = 0;
-
-    for (const messageBackup of backupData.messages) {
-      try {
-        const files = [];
-        for (const att of messageBackup.attachments) {
-          if (att.url) {
-            files.push({
-              attachment: att.url,
-              name: att.filename || 'attachment'
-            });
-          }
-        }
-
-        let content = messageBackup.content || ' '; // Use a space if content is empty
-
-        if (files.length === 0) {
-          await webhook.send({
-            content: content,
-            username: messageBackup.author.username,
-            avatarURL: messageBackup.author.avatar
-          });
-        } else {
-          await webhook.send({
-            content: content,
-            username: messageBackup.author.username,
-            avatarURL: messageBackup.author.avatar,
-            files: files
-          });
-        }
-        restoredCount++;
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit delay
-      } catch (error) {
-        Logger.error(`Failed to restore message: ${error.message}`);
-        failedCount++;
-      }
-    }
-
-    return {
-      success: true,
-      restoredCount,
-      failedCount,
-      message: `Restored ${restoredCount} messages${failedCount > 0 ? `, ${failedCount} failed` : ''}`
-    };
-  } catch (error) {
-    Logger.error('Error while restoring:', error.message);
-    throw error;
-  }
-}
-
-async function restoreGuild(backupFilePath, targetGuildId, clearServerBeforeRestore = true) {
+async function restoreGuild(backupData, targetGuildId, clearServerBeforeRestore = true) {
   const guild = await discordService.getClient().guilds.fetch(targetGuildId);
   if (!guild) throw new Error('Guild not found');
 
-  const backupData = JSON.parse(await fs.promises.readFile(backupFilePath, 'utf-8'));
-  
   if (clearServerBeforeRestore) {
     Logger.info('Clearing existing channels...');
     await Promise.all(
@@ -565,6 +766,127 @@ app.post('/backup-selected-dms', async (req, res) => {
   } catch (error) {
     Logger.error('Failed to backup selected DMs:', error);
     res.status(500).json({ error: 'Failed to backup selected DMs' });
+  }
+});
+
+// Add upload and restore endpoint
+app.post('/restore-with-webhook', upload.single('backupFile'), async (req, res) => {
+  try {
+    const { targetId } = req.body;
+    const uploadedFile = req.file;
+
+    if (!targetId || !uploadedFile) {
+      return res.status(400).json({ error: 'Missing target ID or backup file' });
+    }
+
+    // Read the uploaded file
+    const fileContent = await fs.promises.readFile(uploadedFile.path, 'utf8');
+    let backupData;
+    
+    try {
+      backupData = JSON.parse(fileContent);
+    } catch (error) {
+      return res.status(400).json({ error: 'Invalid backup file format' });
+    }
+
+    // Get target channel
+    const channel = await discordService.getClient().channels.fetch(targetId);
+    if (!channel) {
+      return res.status(404).json({ error: 'Target channel not found' });
+    }
+
+    // Check permissions
+    if (!channel.permissionsFor(discordService.getClient().user.id).has(['SEND_MESSAGES', 'MANAGE_WEBHOOKS'])) {
+      return res.status(403).json({ error: 'Bot lacks required permissions in target channel' });
+    }
+
+    // Create webhook
+    const webhook = await channel.createWebhook('Message Restore', {
+      avatar: discordService.getClient().user.displayAvatarURL()
+    });
+
+    try {
+      // Handle different backup formats
+      const messages = Array.isArray(backupData) ? backupData :
+        backupData.messages ? backupData.messages :
+        backupData.channels ? backupData.channels.flatMap(c => c.messages) : [];
+
+      let restoredCount = 0;
+      let failedCount = 0;
+
+      // Sort messages by timestamp if available
+      const sortedMessages = messages.sort((a, b) => 
+        (a.timestamp || 0) - (b.timestamp || 0)
+      );
+
+      for (const message of sortedMessages) {
+        try {
+          // Send message content
+          if (message.content?.trim()) {
+            await webhook.send({
+              content: message.content,
+              username: message.author || message.webhookData?.username || 'Unknown User',
+              avatarURL: message.webhookData?.avatarURL
+            });
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+
+          // Send attachments
+          if (message.attachments?.length > 0) {
+            for (const attachment of message.attachments) {
+              try {
+                if (attachment.url) {
+                  await webhook.send({
+                    files: [{
+                      attachment: attachment.url,
+                      name: attachment.filename || attachment.name || 'attachment'
+                    }],
+                    username: message.author || message.webhookData?.username || 'Unknown User',
+                    avatarURL: message.webhookData?.avatarURL
+                  });
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+              } catch (attachError) {
+                Logger.error(`Failed to restore attachment: ${attachError.message}`);
+              }
+            }
+          }
+
+          restoredCount++;
+          Logger.success(`Restored message ${restoredCount}`);
+        } catch (error) {
+          Logger.error(`Failed to restore message: ${error.message}`);
+          failedCount++;
+
+          if (failedCount > 5) {
+            throw new Error('Too many consecutive failures, stopping restore');
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Restored ${restoredCount} messages${failedCount > 0 ? ` (${failedCount} failed)` : ''}`
+      });
+    } finally {
+      // Cleanup
+      if (webhook) {
+        try {
+          await webhook.delete();
+        } catch (error) {
+          Logger.error('Failed to delete webhook:', error);
+        }
+      }
+      // Delete uploaded file
+      try {
+        await fs.promises.unlink(uploadedFile.path);
+      } catch (error) {
+        Logger.error('Failed to delete uploaded file:', error);
+      }
+    }
+  } catch (error) {
+    Logger.error('Restore failed:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

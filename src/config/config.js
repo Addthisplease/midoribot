@@ -11,5 +11,10 @@ module.exports = {
         BACKUPS: 'backups',
         UPLOADS: 'uploads',
         ATTACHMENTS: 'attachments'
+    },
+    RATE_LIMITS: {
+        MESSAGES_PER_SECOND: 1,
+        ATTACHMENTS_PER_SECOND: 1,
+        WEBHOOK_OPERATIONS_PER_MINUTE: 30
     }
 }; 
