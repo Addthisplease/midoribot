@@ -196,12 +196,25 @@ class RestoreService {
                     try {
                         user = await this.client.users.fetch(sourceChannelId, { force: true });
                     } catch (userError) {
-                        Logger.error(`Failed to fetch user: ${userError.message}`);
-                        throw new Error(`User not found or not accessible (ID: ${sourceChannelId})`);
+                        if (userError.code === 10013) {
+                            const error = new Error(`User not found. The user ID ${sourceChannelId} does not exist on Discord.`);
+                            error.code = 10013;
+                            throw error;
+                        } else if (userError.code === 50001) {
+                            const error = new Error(`Cannot access user. The user may have blocked the bot or has DMs disabled (ID: ${sourceChannelId})`);
+                            error.code = 50001;
+                            throw error;
+                        } else {
+                            const error = new Error(`Failed to fetch user: ${userError.message} (ID: ${sourceChannelId})`);
+                            error.code = userError.code;
+                            throw error;
+                        }
                     }
 
                     if (!user) {
-                        throw new Error(`User not found (ID: ${sourceChannelId})`);
+                        const error = new Error(`User not found (ID: ${sourceChannelId})`);
+                        error.code = 10013;
+                        throw error;
                     }
 
                     Logger.info(`Found user: ${user.tag} (${user.id})`);
@@ -210,17 +223,29 @@ class RestoreService {
                     try {
                         sourceChannel = await user.createDM();
                         if (!sourceChannel) {
-                            throw new Error('Failed to create DM channel');
+                            const error = new Error(`Failed to create DM channel with user ${user.tag}. The user may have DMs disabled.`);
+                            error.code = 50007;
+                            throw error;
                         }
                     } catch (dmError) {
-                        Logger.error(`Failed to create DM channel: ${dmError.message}`);
-                        throw new Error(`Could not create DM channel with user ${user.tag} (${user.id})`);
+                        if (dmError.code === 50007) {
+                            const error = new Error(`Cannot send messages to this user. The user has DMs disabled or has blocked the bot (${user.tag})`);
+                            error.code = 50007;
+                            throw error;
+                        } else {
+                            const error = new Error(`Could not create DM channel with user ${user.tag}: ${dmError.message}`);
+                            error.code = dmError.code || 50001;
+                            throw error;
+                        }
                     }
 
                     Logger.success(`Created/fetched DM channel for user: ${user.tag}`);
                 } catch (error) {
                     Logger.error(`Failed to setup DM channel: ${error.message}`);
-                    throw new Error(`Could not access DM channel (User ID: ${sourceChannelId}) - ${error.message}`);
+                    // Preserve error code when rethrowing
+                    const newError = new Error(`Could not access DM channel (User ID: ${sourceChannelId}) - ${error.message}`);
+                    newError.code = error.code;
+                    throw newError;
                 }
             } else if (type === 'guild') {
                 try {
@@ -368,6 +393,7 @@ class RestoreService {
                         Logger.info('Cleaned up webhook');
                     } catch (error) {
                         Logger.error('Failed to delete webhook:', error);
+                        // Don't throw here as it's cleanup code
                     }
                 }
             }

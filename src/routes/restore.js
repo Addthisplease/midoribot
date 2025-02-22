@@ -60,12 +60,52 @@ router.post('/restore-direct', async (req, res) => {
             });
         }
 
+        // Validate channel type
+        if (type && !['dm', 'guild'].includes(type)) {
+            return res.status(400).json({
+                error: 'Invalid channel type. Must be either "dm" or "guild".',
+                details: { type }
+            });
+        }
+
         const result = await restoreService.restoreDirectMessages(sourceChannelId, targetChannelId, type);
         res.json(result);
     } catch (error) {
         Logger.error('Direct restore error:', error);
-        res.status(error.code === 10003 ? 404 : 500).json({ 
-            error: error.message || 'Failed to restore messages',
+        
+        // Handle specific Discord API error codes
+        let statusCode = 500;
+        let errorMessage = error.message;
+        
+        switch (error.code) {
+            case 10013:
+                statusCode = 404;
+                errorMessage = `The user ID ${sourceChannelId} does not exist on Discord.`;
+                break;
+            case 50001:
+                statusCode = 403;
+                errorMessage = `Cannot access the user. They may have blocked the bot or have DMs disabled.`;
+                break;
+            case 50007:
+                statusCode = 403;
+                errorMessage = `Cannot send messages to this user. They have DMs disabled or have blocked the bot.`;
+                break;
+            case 10003:
+                statusCode = 404;
+                errorMessage = `The channel ID ${targetChannelId} does not exist.`;
+                break;
+            case 50013:
+                statusCode = 403;
+                errorMessage = `The bot lacks permissions to access the target channel.`;
+                break;
+            default:
+                if (error.code) {
+                    statusCode = error.code >= 500 ? 500 : 400;
+                }
+        }
+        
+        res.status(statusCode).json({ 
+            error: errorMessage,
             details: {
                 sourceChannelId,
                 targetChannelId,

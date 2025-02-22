@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "start": "node main.js"
+  },
   "dependencies": {
     "archiver": "^7.0.1",
     "blob-polyfill": "^9.0.20240710",
