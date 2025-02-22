@@ -61,9 +61,9 @@ router.post('/restore-direct', async (req, res) => {
         }
 
         // Validate channel type
-        if (type && !['dm', 'group', 'guild'].includes(type)) {
+        if (type && !['dm', 'group'].includes(type)) {
             return res.status(400).json({
-                error: 'Invalid channel type. Must be either "dm", "group", or "guild".',
+                error: 'Invalid channel type. Must be either "dm" or "group".',
                 details: { type }
             });
         }
@@ -80,15 +80,15 @@ router.post('/restore-direct', async (req, res) => {
         switch (error.code) {
             case 10013:
                 statusCode = 404;
-                errorMessage = `The user/channel ID ${sourceChannelId} does not exist on Discord.`;
+                errorMessage = `The user ID ${sourceChannelId} does not exist on Discord.`;
                 break;
             case 50001:
                 statusCode = 403;
-                errorMessage = `Cannot access the user/channel. They may have blocked the bot or have DMs disabled.`;
+                errorMessage = `Cannot access the user. They may have blocked the bot or have DMs disabled.`;
                 break;
             case 50007:
                 statusCode = 403;
-                errorMessage = `Cannot send messages to this user/channel. They have DMs disabled or have blocked the bot.`;
+                errorMessage = `Cannot send messages to this user. They have DMs disabled or have blocked the bot.`;
                 break;
             case 10003:
                 statusCode = 404;

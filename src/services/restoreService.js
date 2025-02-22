@@ -204,50 +204,28 @@ class RestoreService {
                             throw new Error(`Could not access group channel (ID: ${sourceChannelId})`);
                         }
                     } else {
-                        // Existing DM channel code...
+                        // For DMs, fetch the user first
                         let user;
                         try {
                             user = await this.client.users.fetch(sourceChannelId, { force: true });
+                            sourceChannel = await user.createDM();
+                            Logger.success(`Created DM channel with user: ${user.tag}`);
                         } catch (userError) {
                             if (userError.code === 10013) {
-                                const error = new Error(`User not found. The user ID ${sourceChannelId} does not exist on Discord.`);
-                                error.code = 10013;
-                                throw error;
+                                throw new Error(`User not found. The user ID ${sourceChannelId} does not exist on Discord.`);
                             } else if (userError.code === 50001) {
-                                const error = new Error(`Cannot access user. The user may have blocked the bot or has DMs disabled (ID: ${sourceChannelId})`);
-                                error.code = 50001;
-                                throw error;
+                                throw new Error(`Cannot access user. The user may have blocked the bot or has DMs disabled (ID: ${sourceChannelId})`);
                             } else {
-                                const error = new Error(`Failed to fetch user: ${userError.message} (ID: ${sourceChannelId})`);
-                                error.code = userError.code;
-                                throw error;
+                                throw new Error(`Failed to fetch user: ${userError.message} (ID: ${sourceChannelId})`);
                             }
                         }
-
-                        // ... existing DM channel creation code ...
                     }
-
-                    Logger.success(`Created/fetched ${type} channel`);
                 } catch (error) {
                     Logger.error(`Failed to setup ${type} channel: ${error.message}`);
-                    const newError = new Error(`Could not access ${type} channel (ID: ${sourceChannelId}) - ${error.message}`);
-                    newError.code = error.code;
-                    throw newError;
-                }
-            } else if (type === 'guild') {
-                try {
-                    // Get the channel directly instead of searching through all guilds
-                    sourceChannel = await this.client.channels.fetch(sourceChannelId);
-                    if (!sourceChannel) {
-                        throw new Error('Channel not found');
-                    }
-                    Logger.success(`Found server channel: #${sourceChannel.name} in ${sourceChannel.guild.name}`);
-                } catch (error) {
-                    Logger.error(`Failed to fetch server channel: ${error.message}`);
-                    throw new Error(`Could not access server channel (ID: ${sourceChannelId})`);
+                    throw error;
                 }
             } else {
-                throw new Error(`Invalid channel type: ${type}. Must be 'dm', 'group', or 'guild'`);
+                throw new Error(`Invalid channel type: ${type}. Must be 'dm' or 'group'`);
             }
 
             // Get target channel
@@ -268,7 +246,7 @@ class RestoreService {
                 throw new Error('Bot lacks required permissions in target channel (needs SEND_MESSAGES and MANAGE_WEBHOOKS)');
             }
 
-            Logger.info(`Starting restore from ${type === 'dm' ? 'DM' : 'server'} to ${targetChannel.name}`);
+            Logger.info(`Starting restore from ${type} to ${targetChannel.name}`);
             let restoredCount = 0;
             let failedCount = 0;
 
@@ -380,7 +358,6 @@ class RestoreService {
                         Logger.info('Cleaned up webhook');
                     } catch (error) {
                         Logger.error('Failed to delete webhook:', error);
-                        // Don't throw here as it's cleanup code
                     }
                 }
             }
