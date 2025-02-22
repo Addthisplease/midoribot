@@ -559,9 +559,18 @@ async function restoreGuild(backupData, targetGuildId, clearServerBeforeRestore 
   let restoredMessages = 0;
   let failedCount = 0;
 
+  // Ensure we have messages to process
+  const messages = Array.isArray(backupData) ? backupData : 
+                  backupData.messages ? backupData.messages :
+                  backupData.channels ? backupData.channels.flatMap(c => c.messages || []) : [];
+
+  if (messages.length === 0) {
+    throw new Error('No messages found in backup data');
+  }
+
   // Group messages by channel
   const channelMessages = {};
-  for (const message of backupData) {
+  for (const message of messages) {
     const channelName = message.channelName || 'restored-chat';
     if (!channelMessages[channelName]) {
       channelMessages[channelName] = [];
