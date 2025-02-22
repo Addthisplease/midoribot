@@ -458,21 +458,25 @@
 
       try {
         showToast('Starting restore...');
+        logToConsole(`Starting restore from ${currentItemType} ${currentChannelId} to ${targetChannelId}...`);
         
-        const response = await fetch('/restore-direct', {
+        const response = await fetch('/restore', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            sourceChannelId: currentChannelId,
-            targetChannelId: targetChannelId
+            backupId: currentChannelId,
+            targetId: targetChannelId,
+            type: currentItemType,
+            clearServer: currentItemType === 'guild' ? document.getElementById('clearServer').checked : false
           })
         });
 
         const data = await response.json();
         if (response.ok) {
           showToast(data.message);
+          logToConsole(data.message);
           closeRestoreDialog();
         } else {
           throw new Error(data.error || 'Restore failed');
@@ -567,6 +571,8 @@
 
       try {
         showToast('Starting DM restore...');
+        logToConsole(`Starting DM restore from ${data.backupId} to ${data.targetId}...`);
+        
         const response = await fetch('/restore', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -576,6 +582,7 @@
         const result = await response.json();
         if (response.ok) {
           showToast(result.message || 'DM restore successful!');
+          logToConsole(result.message || 'DM restore successful!');
           e.target.reset();
         } else {
           throw new Error(result.error || 'Failed to restore DM');
@@ -599,6 +606,8 @@
 
       try {
         showToast('Starting server restore...');
+        logToConsole(`Starting server restore from ${data.backupId} to ${data.targetId}...`);
+        
         const response = await fetch('/restore', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -608,6 +617,7 @@
         const result = await response.json();
         if (response.ok) {
           showToast(result.message || 'Server restore successful!');
+          logToConsole(result.message || 'Server restore successful!');
           e.target.reset();
         } else {
           throw new Error(result.error || 'Failed to restore server');
