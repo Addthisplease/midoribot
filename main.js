@@ -172,69 +172,97 @@ app.post('/backup-guild', async (req, res) => {
 
         Logger.info(`Starting backup for server: ${server.name} (${server.id})`);
 
-        // Get all text channels that we have access to
-        const channels = server.channels.cache.filter(channel => 
-            channel.type === 'GUILD_TEXT' && 
-            channel.permissionsFor(server.members.me).has(['VIEW_CHANNEL', 'READ_MESSAGE_HISTORY'])
-        );
-
-        let totalMessages = 0;
-        let skippedChannels = 0;
-        let processedChannels = 0;
         const backupData = {
             type: 'guild',
             serverId: server.id,
             serverName: server.name,
+            icon: server.iconURL(),
+            roles: [],
             channels: []
         };
 
-        Logger.info(`Found ${channels.size} accessible channels`);
-
-        for (const [_, channel] of channels) {
-            try {
-                Logger.info(`Processing channel #${channel.name}...`);
-                const messages = await channel.messages.fetch({ limit: 100 }).catch(error => {
-                    Logger.warn(`Skipping channel #${channel.name} - ${error.message}`);
-                    skippedChannels++;
-                    return null;
+        // Backup roles
+        Logger.info('Backing up roles...');
+        server.roles.cache.forEach(role => {
+            if (!role.managed && role.id !== server.id) {
+                backupData.roles.push({
+                    name: role.name,
+                    color: role.color,
+                    hoist: role.hoist,
+                    position: role.position,
+                    permissions: role.permissions.bitfield.toString(),
+                    mentionable: role.mentionable
                 });
-
-                if (!messages) continue;
-
-                const channelMessages = messages.map(msg => ({
-                    author: msg.author.username,
-                    content: msg.content,
-                    attachments: Array.from(msg.attachments.values()).map(att => ({
-                        url: att.url,
-                        name: att.name
-                    })),
-                    timestamp: msg.createdTimestamp,
-                    webhookData: {
-                        username: msg.author.username,
-                        avatarURL: msg.author.displayAvatarURL()
-                    }
-                }));
-
-                backupData.channels.push({
-                    id: channel.id,
-                    name: channel.name,
-                    messages: channelMessages
-                });
-
-                totalMessages += messages.size;
-                processedChannels++;
-                Logger.success(`✓ Channel #${channel.name}: ${messages.size} messages backed up`);
-            } catch (error) {
-                Logger.error(`Failed to backup channel #${channel.name}:`, error);
-                skippedChannels++;
             }
+        });
+
+        // First backup categories
+        Logger.info('Backing up categories...');
+        const categories = server.channels.cache.filter(c => c.type === 'GUILD_CATEGORY');
+        for (const [_, category] of categories) {
+            backupData.channels.push({
+                name: category.name,
+                type: 'GUILD_CATEGORY',
+                position: category.position,
+                permissionOverwrites: Array.from(category.permissionOverwrites.cache.values()).map(p => ({
+                    id: p.id,
+                    type: p.type,
+                    allow: p.allow.bitfield.toString(),
+                    deny: p.deny.bitfield.toString()
+                }))
+            });
         }
 
-        if (totalMessages === 0) {
-            Logger.error('No messages could be backed up');
-            return res.status(400).json({ 
-                error: 'No messages could be backed up. Check bot permissions.' 
-            });
+        // Then backup all other channels
+        Logger.info('Backing up channels...');
+        const channels = server.channels.cache.filter(c => c.type !== 'GUILD_CATEGORY');
+        
+        for (const [_, channel] of channels) {
+            try {
+                const channelData = {
+                    name: channel.name,
+                    type: channel.type,
+                    position: channel.position,
+                    topic: channel.topic,
+                    nsfw: channel.nsfw,
+                    bitrate: channel.bitrate,
+                    userLimit: channel.userLimit,
+                    rateLimitPerUser: channel.rateLimitPerUser,
+                    parent: channel.parent?.name,
+                    permissionOverwrites: Array.from(channel.permissionOverwrites.cache.values()).map(p => ({
+                        id: p.id,
+                        type: p.type,
+                        allow: p.allow.bitfield.toString(),
+                        deny: p.deny.bitfield.toString()
+                    })),
+                    messages: []
+                };
+
+                // Backup messages for text channels
+                if (channel.type === 'GUILD_TEXT') {
+                    Logger.info(`Fetching messages from #${channel.name}...`);
+                    const messages = await channel.messages.fetch({ limit: 100 });
+                    channelData.messages = messages.map(msg => ({
+                        content: msg.content,
+                        author: msg.author.username,
+                        timestamp: msg.createdTimestamp,
+                        attachments: Array.from(msg.attachments.values()).map(att => ({
+                            url: att.url,
+                            name: att.name
+                        })),
+                        embeds: msg.embeds,
+                        webhookData: {
+                            username: msg.author.username,
+                            avatarURL: msg.author.displayAvatarURL()
+                        }
+                    }));
+                    Logger.success(`✓ Backed up ${messages.size} messages from #${channel.name}`);
+                }
+
+                backupData.channels.push(channelData);
+            } catch (error) {
+                Logger.error(`Failed to backup channel #${channel.name}:`, error);
+            }
         }
 
         // Save backup
@@ -250,20 +278,14 @@ app.post('/backup-guild', async (req, res) => {
         await fs.promises.writeFile(backupPath, JSON.stringify(backupData, null, 2));
         Logger.success(`Server backup saved to: ${backupPath}`);
 
-        const summary = `Server backup completed: ${totalMessages} messages backed up from ${processedChannels} channels` + 
-                       (skippedChannels > 0 ? ` (${skippedChannels} channels skipped)` : '');
-        
-        Logger.success(summary);
-
         res.json({
-            message: summary,
+            message: `Server backup completed successfully`,
             success: true,
             backupId,
             details: {
-                totalMessages,
-                skippedChannels,
-                channelsProcessed: processedChannels,
                 serverName: server.name,
+                roles: backupData.roles.length,
+                channels: backupData.channels.length,
                 backupPath,
                 timestamp: new Date().toISOString()
             }
@@ -543,194 +565,175 @@ app.post('/restore', async (req, res) => {
 });
 
 async function restoreGuild(backupData, targetGuildId, clearServerBeforeRestore = true) {
-  const guild = await discordService.getClient().guilds.fetch(targetGuildId);
-  if (!guild) throw new Error('Guild not found');
+    const guild = await discordService.getClient().guilds.fetch(targetGuildId);
+    if (!guild) throw new Error('Guild not found');
 
-  if (clearServerBeforeRestore) {
-    Logger.info('Clearing existing channels...');
-    await Promise.all(
-      guild.channels.cache
-        .filter(channel => channel.deletable)
-        .map(channel => channel.delete())
-    );
-  }
-
-  let restoredChannels = 0;
-  let restoredMessages = 0;
-  let failedCount = 0;
-
-  // First, create categories
-  const categories = new Map();
-  if (backupData.channels) {
-    const categoryChannels = backupData.channels
-      .filter(c => c.type === 'GUILD_CATEGORY' || c.type === 'category')
-      .sort((a, b) => (a.position || 0) - (b.position || 0));
-
-    for (const categoryData of categoryChannels) {
-      try {
-        const category = await guild.channels.create(categoryData.name, {
-          type: 'GUILD_CATEGORY',
-          position: categoryData.position || 0,
-          permissionOverwrites: categoryData.permissionOverwrites || []
-        });
-        categories.set(categoryData.id || categoryData.name, category.id);
-        Logger.success(`Created category: ${category.name}`);
-      } catch (error) {
-        Logger.error(`Failed to create category: ${error.message}`);
-        failedCount++;
-      }
+    if (clearServerBeforeRestore) {
+        Logger.info('Clearing existing channels and roles...');
+        // Delete channels
+        await Promise.all(
+            guild.channels.cache
+                .filter(channel => channel.deletable)
+                .map(channel => channel.delete())
+        );
+        // Delete roles
+        await Promise.all(
+            guild.roles.cache
+                .filter(role => role.editable && !role.managed && role.id !== guild.id)
+                .map(role => role.delete())
+        );
     }
-  }
 
-  // Then create channels and restore messages
-  const channels = backupData.channels ? backupData.channels.filter(c => c.type !== 'GUILD_CATEGORY') : [];
-  
-  for (const channelData of channels) {
+    let restoredRoles = 0;
+    let restoredChannels = 0;
+    let restoredMessages = 0;
+    let failedCount = 0;
+
     try {
-      // Find parent category if exists
-      let parentId = null;
-      if (channelData.parentId) {
-        parentId = categories.get(channelData.parentId);
-      } else if (channelData.parent) {
-        parentId = categories.get(channelData.parent);
-      }
-
-      // Create channel with proper settings
-      const channel = await guild.channels.create(channelData.name || 'general', {
-        type: channelData.type || 'GUILD_TEXT',
-        topic: channelData.topic,
-        nsfw: channelData.nsfw,
-        parent: parentId,
-        position: channelData.position,
-        permissionOverwrites: channelData.permissionOverwrites || []
-      });
-
-      // Create webhook for message restore
-      const webhook = await channel.createWebhook('Server Restore', {
-        avatar: discordService.getClient().user.displayAvatarURL()
-      });
-
-      // Restore messages
-      const messages = channelData.messages || [];
-      for (const message of messages) {
-        try {
-          const webhookData = {
-            content: message.content,
-            username: message.webhookData?.username || message.author,
-            avatarURL: message.webhookData?.avatarURL,
-            files: [],
-            allowedMentions: { parse: [] }
-          };
-
-          // Handle attachments
-          if (message.attachments?.length > 0) {
-            for (const attachment of message.attachments) {
-              if (attachment.url) {
+        // First, restore roles
+        Logger.info('Restoring roles...');
+        const roles = new Map();
+        if (backupData.roles) {
+            for (const roleData of backupData.roles.sort((a, b) => b.position - a.position)) {
                 try {
-                  // Verify attachment is accessible
-                  const response = await fetch(attachment.url, { method: 'HEAD' });
-                  if (response.ok) {
-                    webhookData.files.push({
-                      attachment: attachment.url,
-                      name: attachment.name || attachment.filename || 'attachment'
+                    const role = await guild.roles.create({
+                        name: roleData.name,
+                        color: roleData.color,
+                        hoist: roleData.hoist,
+                        position: roleData.position,
+                        permissions: BigInt(roleData.permissions),
+                        mentionable: roleData.mentionable
                     });
-                  }
+                    roles.set(roleData.name, role.id);
+                    restoredRoles++;
+                    Logger.success(`Created role: ${role.name}`);
                 } catch (error) {
-                  Logger.error(`Failed to verify attachment ${attachment.url}: ${error.message}`);
+                    Logger.error(`Failed to create role ${roleData.name}:`, error);
+                    failedCount++;
                 }
-              }
             }
-          }
-
-          // Send message
-          await webhook.send(webhookData);
-          restoredMessages++;
-          Logger.success(`Restored message ${restoredMessages} in ${channel.name}`);
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
-        } catch (error) {
-          Logger.error(`Failed to restore message in ${channel.name}: ${error.message}`);
-          failedCount++;
         }
-      }
 
-      // Cleanup webhook
-      await webhook.delete().catch(console.error);
-      restoredChannels++;
-      Logger.success(`Completed channel: ${channel.name}`);
-    } catch (error) {
-      Logger.error(`Failed to restore channel: ${error.message}`);
-      failedCount++;
-    }
-  }
+        // Then restore categories
+        Logger.info('Restoring categories...');
+        const categories = new Map();
+        const categoryChannels = backupData.channels.filter(c => c.type === 'GUILD_CATEGORY');
+        for (const categoryData of categoryChannels) {
+            try {
+                const permissionOverwrites = categoryData.permissionOverwrites?.map(p => ({
+                    id: roles.get(p.id) || p.id,
+                    type: p.type,
+                    allow: BigInt(p.allow),
+                    deny: BigInt(p.deny)
+                }));
 
-  // If no channels were specified in backup, create a default channel
-  if (!backupData.channels || backupData.channels.length === 0) {
-    try {
-      const channel = await guild.channels.create('general', {
-        type: 'GUILD_TEXT'
-      });
-      
-      const webhook = await channel.createWebhook('Server Restore', {
-        avatar: discordService.getClient().user.displayAvatarURL()
-      });
+                const category = await guild.channels.create(categoryData.name, {
+                    type: 'GUILD_CATEGORY',
+                    position: categoryData.position,
+                    permissionOverwrites
+                });
+                categories.set(categoryData.name, category.id);
+                restoredChannels++;
+                Logger.success(`Created category: ${category.name}`);
+            } catch (error) {
+                Logger.error(`Failed to create category ${categoryData.name}:`, error);
+                failedCount++;
+            }
+        }
 
-      // Get messages from backup data
-      const messages = Array.isArray(backupData) ? backupData : 
-                      backupData.messages ? backupData.messages : [];
+        // Finally restore channels and their messages
+        Logger.info('Restoring channels and messages...');
+        const channels = backupData.channels.filter(c => c.type !== 'GUILD_CATEGORY');
+        for (const channelData of channels) {
+            try {
+                const permissionOverwrites = channelData.permissionOverwrites?.map(p => ({
+                    id: roles.get(p.id) || p.id,
+                    type: p.type,
+                    allow: BigInt(p.allow),
+                    deny: BigInt(p.deny)
+                }));
 
-      for (const message of messages) {
-        try {
-          const webhookData = {
-            content: message.content,
-            username: message.webhookData?.username || message.author,
-            avatarURL: message.webhookData?.avatarURL,
-            files: [],
-            allowedMentions: { parse: [] }
-          };
+                const channel = await guild.channels.create(channelData.name, {
+                    type: channelData.type,
+                    topic: channelData.topic,
+                    nsfw: channelData.nsfw,
+                    bitrate: channelData.bitrate,
+                    userLimit: channelData.userLimit,
+                    rateLimitPerUser: channelData.rateLimitPerUser,
+                    parent: channelData.parent ? categories.get(channelData.parent) : null,
+                    position: channelData.position,
+                    permissionOverwrites
+                });
 
-          if (message.attachments?.length > 0) {
-            for (const attachment of message.attachments) {
-              if (attachment.url) {
-                try {
-                  const response = await fetch(attachment.url, { method: 'HEAD' });
-                  if (response.ok) {
-                    webhookData.files.push({
-                      attachment: attachment.url,
-                      name: attachment.name || attachment.filename || 'attachment'
+                // Restore messages if it's a text channel
+                if (channelData.messages?.length > 0) {
+                    const webhook = await channel.createWebhook('Server Restore', {
+                        avatar: discordService.getClient().user.displayAvatarURL()
                     });
-                  }
-                } catch (error) {
-                  Logger.error(`Failed to verify attachment ${attachment.url}: ${error.message}`);
+
+                    try {
+                        for (const message of channelData.messages) {
+                            try {
+                                const webhookData = {
+                                    content: message.content,
+                                    username: message.webhookData?.username || message.author,
+                                    avatarURL: message.webhookData?.avatarURL,
+                                    files: [],
+                                    allowedMentions: { parse: [] }
+                                };
+
+                                if (message.attachments?.length > 0) {
+                                    for (const attachment of message.attachments) {
+                                        if (attachment.url) {
+                                            try {
+                                                const response = await fetch(attachment.url, { method: 'HEAD' });
+                                                if (response.ok) {
+                                                    webhookData.files.push({
+                                                        attachment: attachment.url,
+                                                        name: attachment.name || 'attachment'
+                                                    });
+                                                }
+                                            } catch (error) {
+                                                Logger.error(`Failed to verify attachment: ${error.message}`);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                await webhook.send(webhookData);
+                                restoredMessages++;
+                                Logger.success(`Restored message ${restoredMessages} in ${channel.name}`);
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                            } catch (error) {
+                                Logger.error(`Failed to restore message in ${channel.name}: ${error.message}`);
+                                failedCount++;
+                            }
+                        }
+                    } finally {
+                        await webhook.delete().catch(console.error);
+                    }
                 }
-              }
+
+                restoredChannels++;
+                Logger.success(`Restored channel: ${channel.name}`);
+            } catch (error) {
+                Logger.error(`Failed to restore channel ${channelData.name}:`, error);
+                failedCount++;
             }
-          }
-
-          await webhook.send(webhookData);
-          restoredMessages++;
-          Logger.success(`Restored message ${restoredMessages} in ${channel.name}`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        } catch (error) {
-          Logger.error(`Failed to restore message in ${channel.name}: ${error.message}`);
-          failedCount++;
         }
-      }
 
-      await webhook.delete().catch(console.error);
-      restoredChannels++;
+        return {
+            success: true,
+            restoredRoles,
+            restoredChannels,
+            restoredMessages,
+            failedCount,
+            message: `Restored ${restoredRoles} roles, ${restoredChannels} channels, ${restoredMessages} messages${failedCount > 0 ? `, ${failedCount} failed` : ''}`
+        };
     } catch (error) {
-      Logger.error(`Failed to create default channel: ${error.message}`);
-      failedCount++;
+        Logger.error('Server restore failed:', error);
+        throw error;
     }
-  }
-
-  return {
-    success: true,
-    restoredChannels,
-    restoredMessages,
-    failedCount,
-    message: `Restored ${restoredChannels} channels, ${restoredMessages} messages${failedCount > 0 ? `, ${failedCount} failed` : ''}`
-  };
 }
 
 // Add restore direct endpoint
