@@ -1,5 +1,4 @@
 node_modules
-.env
 backups/
 bun.lock
 pnpm-lock.yaml
