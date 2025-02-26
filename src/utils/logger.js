@@ -3,23 +3,23 @@ const figlet = require('figlet');
 
 class Logger {
     static showWelcome() {
-        console.log(chalk.blue(figlet.textSync('Midoribot', { horizontalLayout: 'full' })));
+        console.log(figlet.textSync('Midoribot', { horizontalLayout: 'full' }));
     }
 
     static info(message) {
-        console.log(chalk.blue(`[INFO] ${message}`));
+        console.log(`[INFO] ${message}`);
     }
 
     static success(message) {
-        console.log(chalk.green(`[SUCCESS] ${message}`));
+        console.log(`[SUCCESS] ${message}`);
     }
 
     static error(message, error) {
-        console.error(chalk.red(`[ERROR] ${message}`), error || '');
+        console.error(`[ERROR] ${message}`, error || '');
     }
 
     static warn(message) {
-        console.log(chalk.yellow(`[WARN] ${message}`));
+        console.log(`[WARN] ${message}`);
     }
 }
 

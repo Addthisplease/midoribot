@@ -16,7 +16,7 @@ async function processMessageBatch(data) {
         const webhookClient = new WebhookClient({ 
             id: webhook.id, 
             token: webhook.token,
-            url: webhook.url // Added for better reliability
+            url: webhook.url
         });
         
         const results = [];
@@ -37,33 +37,41 @@ async function processMessageBatch(data) {
                     avatarURL: message.webhookData?.avatarURL || message.author?.avatarURL,
                     files: [],
                     embeds: message.embeds || [],
-                    allowedMentions: { parse: [] } // Prevent unwanted pings
+                    allowedMentions: { parse: [] }
                 };
 
                 // Handle attachments with rate limiting
                 if (message.attachments?.length > 0) {
+                    const validAttachments = [];
                     for (const attachment of message.attachments) {
-                        try {
-                            const response = await fetch(attachment.url, { 
-                                method: 'HEAD',
-                                timeout: 5000 // 5 second timeout
+                        if (attachment.url) {
+                            validAttachments.push({
+                                attachment: attachment.url,
+                                name: attachment.name || 'attachment'
                             });
-                            
-                            if (response.ok) {
-                                webhookData.files.push({
-                                    attachment: attachment.url,
-                                    name: attachment.name || 'attachment'
-                                });
-                                await delay(1000 / RATE_LIMITS.ATTACHMENTS_PER_SECOND);
-                            }
-                        } catch (error) {
-                            console.error(`Failed to verify attachment ${attachment.url}:`, error);
                         }
                     }
+
+                    // Send attachments in batches of 10 (Discord's limit)
+                    if (validAttachments.length > 0) {
+                        for (let i = 0; i < validAttachments.length; i += 10) {
+                            const batch = validAttachments.slice(i, i + 10);
+                            await webhookClient.send({
+                                ...webhookData,
+                                content: i === 0 ? webhookData.content : '',
+                                files: batch
+                            });
+                            await delay(1000 / RATE_LIMITS.ATTACHMENTS_PER_SECOND);
+                        }
+                    } else if (webhookData.content || webhookData.embeds.length > 0) {
+                        // Send text-only message if we have content or embeds
+                        await webhookClient.send(webhookData);
+                    }
+                } else if (webhookData.content || webhookData.embeds.length > 0) {
+                    // Send text-only message if we have content or embeds
+                    await webhookClient.send(webhookData);
                 }
 
-                // Send message and track rate limits
-                await webhookClient.send(webhookData);
                 results.push({ success: true, messageId: message.id });
                 messageCount++;
                 lastMessageTime = Date.now();
@@ -77,7 +85,7 @@ async function processMessageBatch(data) {
                 results.push({ 
                     error: error.message, 
                     messageId: message.id,
-                    code: error.code // Include Discord error code if available
+                    code: error.code
                 });
                 
                 // Handle rate limits explicitly
