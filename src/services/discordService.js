@@ -9,8 +9,15 @@ class DiscordService {
             syncStatus: false,
             ws: {
                 properties: {
-                    browser: 'Discord iOS'
+                    os: 'iOS',
+                    browser: 'Discord iOS',
+                    device: 'iPhone'
                 }
+            },
+            restRequestTimeout: 60000,
+            presence: {
+                status: "online",
+                afk: false
             }
         });
 
@@ -25,6 +32,11 @@ class DiscordService {
 
         this.client.on('disconnect', () => {
             Logger.warn('Discord client disconnected');
+        });
+
+        // Handle rate limits
+        this.client.on('rateLimited', (rateLimitInfo) => {
+            Logger.warn(`Rate limited: ${rateLimitInfo.timeout}ms timeout on ${rateLimitInfo.path}`);
         });
     }
 

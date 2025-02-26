@@ -33,24 +33,24 @@ async function processMessageBatch(data) {
 
                 const webhookData = {
                     content: message.content || '',
-                    username: message.author?.username || message.author || 'Unknown User',
-                    avatarURL: message.webhookData?.avatarURL || message.author?.avatarURL,
+                    username: message.author?.username || message.author?.tag || 'Unknown User',
+                    avatarURL: message.author?.displayAvatarURL?.() || message.author?.avatarURL,
                     files: [],
-                    embeds: message.embeds || [],
-                    allowedMentions: { parse: [] }
+                    embeds: message.embeds?.map(embed => ({
+                        ...embed,
+                        timestamp: embed.timestamp?.toISOString() || null
+                    })) || [],
+                    allowedMentions: { parse: [] },
+                    threadId: message.thread?.id
                 };
 
                 // Handle attachments with rate limiting
-                if (message.attachments?.length > 0) {
-                    const validAttachments = [];
-                    for (const attachment of message.attachments) {
-                        if (attachment.url) {
-                            validAttachments.push({
-                                attachment: attachment.url,
-                                name: attachment.name || 'attachment'
-                            });
-                        }
-                    }
+                if (message.attachments?.size > 0 || message.attachments?.length > 0) {
+                    const attachments = Array.from(message.attachments?.values?.() || message.attachments);
+                    const validAttachments = attachments.filter(att => att?.url || att?.proxyURL).map(att => ({
+                        attachment: att.url || att.proxyURL,
+                        name: att.name || 'attachment'
+                    }));
 
                     // Send attachments in batches of 10 (Discord's limit)
                     if (validAttachments.length > 0) {
@@ -60,15 +60,26 @@ async function processMessageBatch(data) {
                                 ...webhookData,
                                 content: i === 0 ? webhookData.content : '',
                                 files: batch
+                            }).catch(async (error) => {
+                                if (error.code === 429) {
+                                    const retryAfter = error.retryAfter || 5000;
+                                    await delay(retryAfter);
+                                    // Retry the send
+                                    await webhookClient.send({
+                                        ...webhookData,
+                                        content: i === 0 ? webhookData.content : '',
+                                        files: batch
+                                    });
+                                } else {
+                                    throw error;
+                                }
                             });
                             await delay(1000 / RATE_LIMITS.ATTACHMENTS_PER_SECOND);
                         }
                     } else if (webhookData.content || webhookData.embeds.length > 0) {
-                        // Send text-only message if we have content or embeds
                         await webhookClient.send(webhookData);
                     }
                 } else if (webhookData.content || webhookData.embeds.length > 0) {
-                    // Send text-only message if we have content or embeds
                     await webhookClient.send(webhookData);
                 }
 
@@ -78,20 +89,23 @@ async function processMessageBatch(data) {
 
                 // Add extra delay every 30 messages (webhook rate limit)
                 if (messageCount % RATE_LIMITS.WEBHOOK_OPERATIONS_PER_MINUTE === 0) {
-                    await delay(2000); // Extra delay to prevent webhook rate limits
+                    await delay(2000);
                 }
 
             } catch (error) {
                 results.push({ 
                     error: error.message, 
                     messageId: message.id,
-                    code: error.code
+                    code: error.code,
+                    retryAfter: error.retryAfter
                 });
                 
                 // Handle rate limits explicitly
-                if (error.code === 429) { // Rate limit error
+                if (error.code === 429) {
                     const retryAfter = error.retryAfter || 5000;
                     await delay(retryAfter);
+                } else {
+                    Logger.error(`Error processing message ${message.id}:`, error);
                 }
             }
         }

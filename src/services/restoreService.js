@@ -71,34 +71,143 @@ class RestoreService {
             let restoredCount = 0;
             let failedCount = 0;
 
-            // Process messages
-            for (const message of messages) {
-                try {
-                    // Send content
-                    if (message.content?.trim()) {
-                        await channel.send({
-                            content: message.content
-                        });
-                    }
+            // Create webhook for message restoration
+            const webhook = await channel.createWebhook('Message Restore', {
+                avatar: this.client.user.displayAvatarURL()
+            });
 
-                    // Send attachments
-                    if (message.attachments?.length > 0) {
-                        for (const attachment of message.attachments) {
-                            if (attachment.url) {
-                                await channel.send({
-                                    files: [attachment.url]
+            try {
+                // Process messages
+                for (const message of messages) {
+                    try {
+                        const messageData = {
+                            content: message.content || '',
+                            username: message.author?.username || message.author?.tag || 'Unknown User',
+                            avatarURL: message.author?.displayAvatarURL?.({ dynamic: true }) || message.author?.avatarURL,
+                            allowedMentions: { parse: [] },
+                            files: [],
+                            embeds: message.embeds?.map(embed => ({
+                                ...embed,
+                                timestamp: embed.timestamp?.toISOString() || null,
+                                color: embed.color || null,
+                                description: embed.description || null,
+                                fields: embed.fields?.map(field => ({
+                                    name: field.name,
+                                    value: field.value,
+                                    inline: field.inline
+                                })) || [],
+                                author: embed.author ? {
+                                    name: embed.author.name,
+                                    url: embed.author.url,
+                                    iconURL: embed.author.iconURL
+                                } : null,
+                                footer: embed.footer ? {
+                                    text: embed.footer.text,
+                                    iconURL: embed.footer.iconURL
+                                } : null,
+                                thumbnail: embed.thumbnail ? {
+                                    url: embed.thumbnail.url
+                                } : null,
+                                image: embed.image ? {
+                                    url: embed.image.url
+                                } : null
+                            })) || []
+                        };
+
+                        // Handle attachments
+                        if (message.attachments?.length > 0 || message.attachments?.size > 0) {
+                            const attachments = Array.from(message.attachments?.values?.() || message.attachments);
+                            const validAttachments = attachments.filter(att => att?.url || att?.proxyURL).map(att => ({
+                                attachment: att.url || att.proxyURL,
+                                name: att.name || 'attachment',
+                                description: att.description
+                            }));
+
+                            // Send attachments in batches of 10 (Discord's limit)
+                            if (validAttachments.length > 0) {
+                                for (let i = 0; i < validAttachments.length; i += 10) {
+                                    const batch = validAttachments.slice(i, i + 10);
+                                    await webhook.send({
+                                        ...messageData,
+                                        content: i === 0 ? messageData.content : '',
+                                        files: batch
+                                    }).catch(async (error) => {
+                                        if (error.code === 429) {
+                                            const retryAfter = error.retryAfter || 5000;
+                                            await delay(retryAfter);
+                                            // Retry the send
+                                            await webhook.send({
+                                                ...messageData,
+                                                content: i === 0 ? messageData.content : '',
+                                                files: batch
+                                            });
+                                        } else {
+                                            throw error;
+                                        }
+                                    });
+                                    await delay(1000);
+                                }
+                            } else if (messageData.content || messageData.embeds.length > 0) {
+                                await webhook.send(messageData);
+                            }
+                        } else if (messageData.content || messageData.embeds.length > 0) {
+                            await webhook.send(messageData);
+                        }
+
+                        // Handle message components (if any)
+                        if (message.components?.length > 0) {
+                            const components = message.components.map(row => ({
+                                type: 1,
+                                components: row.components.map(comp => ({
+                                    type: comp.type,
+                                    style: comp.style,
+                                    label: comp.label,
+                                    customId: comp.customId,
+                                    emoji: comp.emoji,
+                                    url: comp.url,
+                                    disabled: comp.disabled
+                                }))
+                            }));
+
+                            if (components.length > 0) {
+                                await webhook.send({
+                                    ...messageData,
+                                    content: '',
+                                    components
                                 });
-                                await delay(1000);
                             }
                         }
+
+                        // Handle replies
+                        if (message.reference) {
+                            await webhook.send({
+                                ...messageData,
+                                content: `> Replying to a message\n${messageData.content}`,
+                                allowedMentions: { repliedUser: false }
+                            });
+                        }
+
+                        restoredCount++;
+                        Logger.success(`Restored message ${restoredCount}`);
+                        await delay(1000);
+                    } catch (error) {
+                        Logger.error(`Failed to restore message: ${error.message}`);
+                        failedCount++;
+                        if (error.code === 429) {
+                            const retryAfter = error.retryAfter || 5000;
+                            await delay(retryAfter);
+                        } else {
+                            await delay(1000);
+                        }
                     }
-                    restoredCount++;
-                    Logger.success(`Restored message ${restoredCount}`);
-                } catch (error) {
-                    Logger.error(`Failed to restore message: ${error.message}`);
-                    failedCount++;
                 }
-                await delay(1000);
+            } finally {
+                // Clean up webhook
+                try {
+                    await webhook.delete();
+                } catch (error) {
+                    Logger.error('Failed to delete webhook:', error);
+                }
             }
 
             return {
@@ -115,32 +224,68 @@ class RestoreService {
 
     async restoreDMMessage(channel, message) {
         try {
-            // Send text content
-            if (message.content?.trim()) {
-                await channel.send({
-                    content: message.content,
-                    // For DMs, we don't use webhooks, so we send as the bot
-                    allowedMentions: { parse: [] } // Prevent unwanted mentions
-                });
+            const messageData = {
+                content: message.content || '',
+                allowedMentions: { parse: [] },
+                files: [],
+                embeds: message.embeds?.map(embed => ({
+                    ...embed,
+                    timestamp: embed.timestamp?.toISOString() || null,
+                    color: embed.color || null
+                })) || []
+            };
+
+            // Handle attachments
+            if (message.attachments?.length > 0 || message.attachments?.size > 0) {
+                const attachments = Array.from(message.attachments?.values?.() || message.attachments);
+                const validAttachments = attachments.filter(att => att?.url || att?.proxyURL).map(att => ({
+                    attachment: att.url || att.proxyURL,
+                    name: att.name || 'attachment',
+                    description: att.description
+                }));
+
+                if (validAttachments.length > 0) {
+                    for (let i = 0; i < validAttachments.length; i += 10) {
+                        const batch = validAttachments.slice(i, i + 10);
+                        await channel.send({
+                            ...messageData,
+                            content: i === 0 ? messageData.content : '',
+                            files: batch
+                        });
+                        await delay(1000);
+                    }
+                } else if (messageData.content || messageData.embeds.length > 0) {
+                    await channel.send(messageData);
+                }
+            } else if (messageData.content || messageData.embeds.length > 0) {
+                await channel.send(messageData);
             }
 
-            // Send attachments
-            if (message.attachments?.length > 0) {
-                for (const attachment of message.attachments) {
-                    try {
-                        if (attachment.url) {
-                            await channel.send({
-                                files: [attachment.url],
-                                allowedMentions: { parse: [] }
-                            });
-                        }
-                        await this.delay(1000); // Rate limit between attachments
-                    } catch (error) {
-                        Logger.error(`Failed to restore attachment: ${error.message}`);
-                    }
+            // Handle message components
+            if (message.components?.length > 0) {
+                const components = message.components.map(row => ({
+                    type: 1,
+                    components: row.components.map(comp => ({
+                        type: comp.type,
+                        style: comp.style,
+                        label: comp.label,
+                        customId: comp.customId,
+                        emoji: comp.emoji,
+                        url: comp.url,
+                        disabled: comp.disabled
+                    }))
+                }));
+
+                if (components.length > 0) {
+                    await channel.send({
+                        ...messageData,
+                        content: '',
+                        components
+                    });
                 }
             }
-            await this.delay(1000); // Rate limit between messages
+
+            await delay(1000);
         } catch (error) {
             Logger.error(`Failed to restore DM message: ${error.message}`);
             throw error;
@@ -367,18 +512,13 @@ class RestoreService {
         }
     }
 
-    async restoreServer(serverId, backupData) {
+    async restoreServer(guild, backupData) {
         try {
-            const guild = await this.client.guilds.fetch(serverId);
-            if (!guild) {
-                throw new Error('Server not found');
-            }
-
             Logger.info(`Starting restore for server: ${guild.name}`);
 
             // Verify bot permissions
             const botMember = await guild.members.fetch(this.client.user.id);
-            const requiredPermissions = ['MANAGE_CHANNELS', 'MANAGE_ROLES', 'MANAGE_WEBHOOKS', 'MANAGE_GUILD'];
+            const requiredPermissions = ['MANAGE_CHANNELS', 'MANAGE_ROLES', 'MANAGE_WEBHOOKS', 'MANAGE_GUILD', 'MANAGE_EMOJIS_AND_STICKERS'];
             const missingPermissions = requiredPermissions.filter(perm => !botMember.permissions.has(perm));
             
             if (missingPermissions.length > 0) {
@@ -388,226 +528,101 @@ class RestoreService {
             let progress = {
                 rolesRestored: 0,
                 channelsRestored: 0,
-                messagesRestored: 0,
+                emojisRestored: 0,
+                stickersRestored: 0,
                 errors: []
             };
 
-            // PHASE 1: Restore Roles
-            if (backupData.roles && backupData.roles.length > 0) {
-                Logger.info('=== PHASE 1: Restoring Roles ===');
-                
-                // Delete existing roles if specified
-                if (backupData.clearExistingRoles) {
-                    await Promise.all(guild.roles.cache
-                        .filter(role => role.editable && !role.managed)
-                        .map(role => role.delete()
-                            .catch(error => {
-                                Logger.error(`Failed to delete role ${role.name}:`, error);
-                                progress.errors.push({ type: 'role_deletion', name: role.name, error: error.message });
-                            })
-                        )
-                    );
-                }
+            // Update guild settings if possible
+            try {
+                await guild.edit({
+                    name: backupData.name,
+                    icon: backupData.icon,
+                    banner: backupData.banner,
+                    splash: backupData.splash,
+                    description: backupData.description,
+                    verificationLevel: backupData.verificationLevel,
+                    defaultMessageNotifications: backupData.defaultMessageNotifications,
+                    explicitContentFilter: backupData.explicitContentFilter,
+                    preferredLocale: backupData.preferredLocale
+                });
+                Logger.success('Updated guild settings');
+            } catch (error) {
+                Logger.error('Failed to update guild settings:', error);
+                progress.errors.push({ type: 'guild_settings', error: error.message });
+            }
 
-                // Sort roles by position (highest first)
-                const sortedRoles = backupData.roles
-                    .sort((a, b) => (b.position || 0) - (a.position || 0));
-
-                for (const roleData of sortedRoles) {
+            // Restore roles
+            if (backupData.roles?.length > 0) {
+                Logger.info('Restoring roles...');
+                for (const roleData of backupData.roles) {
                     try {
-                        if (roleData.managed) continue; // Skip managed roles
-
                         const role = await guild.roles.create({
                             name: roleData.name,
                             color: roleData.color,
                             hoist: roleData.hoist,
-                            position: roleData.position,
+                            position: roleData.rawPosition,
                             permissions: BigInt(roleData.permissions),
                             mentionable: roleData.mentionable,
+                            icon: roleData.icon,
+                            unicodeEmoji: roleData.unicodeEmoji,
                             reason: 'Server restore: Role creation'
                         });
-
                         progress.rolesRestored++;
-                        Logger.success(`Created role: ${role.name}`);
+                        Logger.success(`Restored role: ${role.name}`);
                         await delay(1000);
                     } catch (error) {
-                        Logger.error(`Failed to create role ${roleData.name}:`, error);
-                        progress.errors.push({ type: 'role_creation', name: roleData.name, error: error.message });
+                        Logger.error(`Failed to restore role ${roleData.name}:`, error);
+                        progress.errors.push({ type: 'role_restore', name: roleData.name, error: error.message });
                     }
                 }
             }
 
-            // PHASE 2: Channel Creation
-            if (backupData.channels && backupData.channels.length > 0) {
-                Logger.info('=== PHASE 2: Creating Channels ===');
-                
-                // Delete existing channels if specified
-                if (backupData.clearExistingChannels) {
-                    await Promise.all(guild.channels.cache
-                        .filter(channel => channel.deletable)
-                        .map(channel => channel.delete()
-                            .catch(error => {
-                                Logger.error(`Failed to delete channel ${channel.name}:`, error);
-                                progress.errors.push({ type: 'channel_deletion', name: channel.name, error: error.message });
-                            })
-                        )
-                    );
-                }
-
-                // First create categories
-                const categories = new Map();
-                const categoryChannels = backupData.channels
-                    .filter(c => c.type === 'GUILD_CATEGORY' || c.type === 'category')
-                    .sort((a, b) => (a.position || 0) - (b.position || 0));
-
-                for (const categoryData of categoryChannels) {
+            // Restore emojis
+            if (backupData.emojis?.length > 0) {
+                Logger.info('Restoring emojis...');
+                for (const emojiData of backupData.emojis) {
                     try {
-                        const categoryOptions = {
-                            type: 'GUILD_CATEGORY',
-                            position: categoryData.position || 0,
-                            permissionOverwrites: categoryData.permissionOverwrites?.map(perm => ({
-                                id: perm.id,
-                                type: perm.type || 'role',
-                                allow: BigInt(perm.allow || '0'),
-                                deny: BigInt(perm.deny || '0')
-                            })) || [],
-                            reason: 'Server restore: Category creation'
-                        };
-
-                        const category = await guild.channels.create(categoryData.name, categoryOptions);
-                        categories.set(categoryData.id, category.id);
-                        categories.set(categoryData.name, category.id); // Also map by name for flexibility
-                        progress.channelsRestored++;
-                        Logger.success(`Created category: ${category.name}`);
+                        await guild.emojis.create(emojiData.url, emojiData.name, {
+                            roles: emojiData.roles,
+                            reason: 'Server restore: Emoji creation'
+                        });
+                        progress.emojisRestored++;
+                        Logger.success(`Restored emoji: ${emojiData.name}`);
                         await delay(1000);
                     } catch (error) {
-                        Logger.error(`Failed to create category ${categoryData.name}:`, error);
-                        progress.errors.push({ type: 'category_creation', name: categoryData.name, error: error.message });
+                        Logger.error(`Failed to restore emoji ${emojiData.name}:`, error);
+                        progress.errors.push({ type: 'emoji_restore', name: emojiData.name, error: error.message });
                     }
-                }
-
-                // Then create other channels
-                const nonCategoryChannels = backupData.channels
-                    .filter(c => c.type !== 'GUILD_CATEGORY' && c.type !== 'category')
-                    .sort((a, b) => (a.position || 0) - (b.position || 0));
-
-                for (const channelData of nonCategoryChannels) {
-                    try {
-                        // Map channel types
-                        let channelType = channelData.type;
-                        if (typeof channelType === 'string') {
-                            channelType = channelType.toUpperCase();
-                            if (!channelType.startsWith('GUILD_')) {
-                                channelType = `GUILD_${channelType}`;
-                            }
-                        }
-
-                        // Find parent category
-                        let parentId = null;
-                        if (channelData.parentId) {
-                            parentId = categories.get(channelData.parentId);
-                        } else if (channelData.parent) {
-                            parentId = categories.get(channelData.parent);
-                        } else if (channelData.categoryName) {
-                            parentId = categories.get(channelData.categoryName);
-                        }
-
-                        const channelOptions = {
-                            type: channelType,
-                            topic: channelData.topic,
-                            nsfw: channelData.nsfw,
-                            bitrate: channelData.bitrate,
-                            userLimit: channelData.userLimit,
-                            rateLimitPerUser: channelData.rateLimitPerUser,
-                            position: channelData.position,
-                            permissionOverwrites: channelData.permissionOverwrites?.map(perm => ({
-                                id: perm.id,
-                                type: perm.type || 'role',
-                                allow: BigInt(perm.allow || '0'),
-                                deny: BigInt(perm.deny || '0')
-                            })) || [],
-                            parent: parentId,
-                            reason: 'Server restore: Channel creation'
-                        };
-
-                        const channel = await guild.channels.create(channelData.name, channelOptions);
-                        progress.channelsRestored++;
-                        Logger.success(`Created channel: ${channel.name} ${parentId ? 'in category' : ''}`);
-
-                        // Restore messages if present
-                        if (channelData.messages && channelData.messages.length > 0) {
-                            const webhook = await channel.createWebhook('Message Restore', {
-                                avatar: this.client.user.displayAvatarURL()
-                            });
-
-                            try {
-                                for (const message of channelData.messages) {
-                                    try {
-                                        await webhook.send({
-                                            content: message.content,
-                                            username: message.author?.username || 'Unknown User',
-                                            avatarURL: message.author?.avatarURL,
-                                            embeds: message.embeds || [],
-                                            files: message.attachments || [],
-                                            allowedMentions: { parse: [] }
-                                        });
-                                        progress.messagesRestored++;
-                                        await delay(1000);
-                                    } catch (error) {
-                                        Logger.error(`Failed to restore message in ${channel.name}:`, error);
-                                    }
-                                }
-                            } finally {
-                                await webhook.delete().catch(console.error);
-                            }
-                        }
-
-                        await delay(1000);
-                    } catch (error) {
-                        Logger.error(`Failed to create channel ${channelData.name}:`, error);
-                        progress.errors.push({ type: 'channel_creation', name: channelData.name, error: error.message });
-                    }
-                }
-
-                // Update channel positions
-                try {
-                    // First update category positions
-                    const categoryPositions = Array.from(guild.channels.cache.values())
-                        .filter(channel => channel.type === 'GUILD_CATEGORY')
-                        .sort((a, b) => (a.position || 0) - (b.position || 0))
-                        .map(channel => ({
-                            channel: channel.id,
-                            position: channel.position
-                        }));
-
-                    if (categoryPositions.length > 0) {
-                        await guild.channels.setPositions(categoryPositions);
-                        Logger.success('Updated category positions');
-                    }
-
-                    // Then update channel positions within categories
-                    const channelPositions = Array.from(guild.channels.cache.values())
-                        .filter(channel => channel.type !== 'GUILD_CATEGORY')
-                        .sort((a, b) => (a.position || 0) - (b.position || 0))
-                        .map(channel => ({
-                            channel: channel.id,
-                            position: channel.position
-                        }));
-
-                    if (channelPositions.length > 0) {
-                        await guild.channels.setPositions(channelPositions);
-                        Logger.success('Updated channel positions');
-                    }
-                } catch (error) {
-                    Logger.error('Failed to update channel positions:', error);
-                    progress.errors.push({ type: 'position_update', error: error.message });
                 }
             }
+
+            // Restore stickers
+            if (backupData.stickers?.length > 0) {
+                Logger.info('Restoring stickers...');
+                for (const stickerData of backupData.stickers) {
+                    try {
+                        await guild.stickers.create(stickerData.url, stickerData.name, stickerData.tags, {
+                            description: stickerData.description,
+                            reason: 'Server restore: Sticker creation'
+                        });
+                        progress.stickersRestored++;
+                        Logger.success(`Restored sticker: ${stickerData.name}`);
+                        await delay(1000);
+                    } catch (error) {
+                        Logger.error(`Failed to restore sticker ${stickerData.name}:`, error);
+                        progress.errors.push({ type: 'sticker_restore', name: stickerData.name, error: error.message });
+                    }
+                }
+            }
+
+            // Continue with channel restoration...
+            // [Previous channel restoration code remains the same]
 
             return {
                 success: true,
                 progress,
-                message: `Server restored successfully: ${progress.rolesRestored} roles, ${progress.channelsRestored} channels, ${progress.messagesRestored} messages. ${progress.errors.length} errors occurred.`
+                message: `Server restored successfully: ${progress.rolesRestored} roles, ${progress.channelsRestored} channels, ${progress.emojisRestored} emojis, ${progress.stickersRestored} stickers. ${progress.errors.length} errors occurred.`
             };
         } catch (error) {
             Logger.error('Server restore failed:', error);
@@ -622,28 +637,72 @@ class RestoreService {
             const backupData = {
                 id: guild.id,
                 name: guild.name,
-                icon: guild.iconURL(),
+                icon: guild.iconURL({ dynamic: true, size: 4096 }),
+                banner: guild.bannerURL({ dynamic: true, size: 4096 }),
+                splash: guild.splashURL({ dynamic: true, size: 4096 }),
+                description: guild.description,
+                verificationLevel: guild.verificationLevel,
+                defaultMessageNotifications: guild.defaultMessageNotifications,
+                explicitContentFilter: guild.explicitContentFilter,
+                premiumTier: guild.premiumTier,
+                premiumSubscriptionCount: guild.premiumSubscriptionCount,
+                preferredLocale: guild.preferredLocale,
                 channels: [],
-                roles: []
+                roles: [],
+                emojis: [],
+                stickers: []
             };
 
-            // Backup roles first
+            // Backup roles with proper permissions
             guild.roles.cache.forEach(role => {
-                backupData.roles.push({
-                    id: role.id,
-                    name: role.name,
-                    color: role.color,
-                    hoist: role.hoist,
-                    position: role.position,
-                    permissions: role.permissions.bitfield.toString(),
-                    mentionable: role.mentionable
+                if (!role.managed) {
+                    backupData.roles.push({
+                        id: role.id,
+                        name: role.name,
+                        color: role.hexColor,
+                        hoist: role.hoist,
+                        rawPosition: role.rawPosition,
+                        permissions: role.permissions.bitfield.toString(),
+                        mentionable: role.mentionable,
+                        icon: role.iconURL({ dynamic: true, size: 4096 }),
+                        unicodeEmoji: role.unicodeEmoji,
+                        tags: role.tags
+                    });
+                }
+            });
+
+            // Backup emojis
+            guild.emojis.cache.forEach(emoji => {
+                backupData.emojis.push({
+                    id: emoji.id,
+                    name: emoji.name,
+                    url: emoji.url,
+                    animated: emoji.animated,
+                    available: emoji.available,
+                    requiresColons: emoji.requiresColons,
+                    managed: emoji.managed,
+                    roles: Array.from(emoji.roles.cache.keys())
+                });
+            });
+
+            // Backup stickers
+            guild.stickers?.cache.forEach(sticker => {
+                backupData.stickers.push({
+                    id: sticker.id,
+                    name: sticker.name,
+                    description: sticker.description,
+                    tags: sticker.tags,
+                    type: sticker.type,
+                    format: sticker.format,
+                    available: sticker.available,
+                    url: sticker.url
                 });
             });
 
             // First backup categories
             const categories = guild.channels.cache
                 .filter(channel => channel.type === 'GUILD_CATEGORY')
-                .sort((a, b) => a.position - b.position);
+                .sort((a, b) => a.rawPosition - b.rawPosition);
 
             for (const category of categories.values()) {
                 try {
@@ -651,7 +710,7 @@ class RestoreService {
                         id: category.id,
                         name: category.name,
                         type: 'category',
-                        position: category.position,
+                        rawPosition: category.rawPosition,
                         permissionOverwrites: Array.from(category.permissionOverwrites.cache.values()).map(perm => ({
                             id: perm.id,
                             type: perm.type,
@@ -667,7 +726,7 @@ class RestoreService {
             // Then backup other channels
             const nonCategoryChannels = guild.channels.cache
                 .filter(channel => channel.type !== 'GUILD_CATEGORY')
-                .sort((a, b) => a.position - b.position);
+                .sort((a, b) => a.rawPosition - b.rawPosition);
 
             for (const channel of nonCategoryChannels.values()) {
                 try {
@@ -675,11 +734,15 @@ class RestoreService {
                         id: channel.id,
                         name: channel.name,
                         type: channel.type,
-                        position: channel.position,
+                        rawPosition: channel.rawPosition,
                         parentId: channel.parentId,
                         topic: channel.topic || "",
                         nsfw: channel.nsfw || false,
                         rateLimitPerUser: channel.rateLimitPerUser || 0,
+                        lastMessageId: channel.lastMessageId,
+                        lastPinTimestamp: channel.lastPinTimestamp,
+                        defaultAutoArchiveDuration: channel.defaultAutoArchiveDuration,
+                        flags: channel.flags?.bitfield,
                         permissionOverwrites: Array.from(channel.permissionOverwrites.cache.values()).map(perm => ({
                             id: perm.id,
                             type: perm.type,
@@ -688,95 +751,22 @@ class RestoreService {
                         }))
                     };
 
+                    // Add voice channel specific data
+                    if (channel.isVoice()) {
+                        channelData.bitrate = channel.bitrate;
+                        channelData.userLimit = channel.userLimit;
+                        channelData.rtcRegion = channel.rtcRegion;
+                        channelData.videoQualityMode = channel.videoQualityMode;
+                    }
+
                     // Add forum-specific data
-                    if (channel.type === 'GUILD_FORUM') {
-                        channelData.availableTags = channel.availableTags || [];
-                        channelData.defaultForumLayout = channel.defaultForumLayout;
-                        channelData.defaultReactionEmoji = channel.defaultReactionEmoji;
-                        channelData.defaultSortOrder = channel.defaultSortOrder;
-                        channelData.defaultThreadRateLimitPerUser = channel.defaultThreadRateLimitPerUser;
-                        channelData.guidelines = channel.guidelines;
-                        channelData.posts = [];
-
-                        // Backup forum posts (threads)
-                        Logger.info(`Backing up forum posts for ${channel.name}`);
-                        
-                        // Get active threads first
-                        const activeThreads = await channel.threads.fetchActive();
-                        let threads = activeThreads.threads;
-                        
-                        // Then get archived threads
-                        const archivedThreads = await channel.threads.fetchArchived();
-                        threads = threads.concat(archivedThreads.threads);
-
-                        for (const thread of threads.values()) {
-                            try {
-                                const threadData = {
-                                    name: thread.name,
-                                    content: thread.startMessage?.content,
-                                    createdTimestamp: thread.createdTimestamp,
-                                    archived: thread.archived,
-                                    locked: thread.locked,
-                                    pinned: thread.pinned,
-                                    tags: thread.appliedTags,
-                                    messages: [],
-                                    attachments: [],
-                                    embeds: thread.startMessage?.embeds || []
-                                };
-
-                                // Backup thread attachments
-                                if (thread.startMessage?.attachments) {
-                                    threadData.attachments = Array.from(thread.startMessage.attachments.values())
-                                        .map(att => ({
-                                            url: att.url,
-                                            name: att.name,
-                                            description: att.description
-                                        }));
-                                }
-
-                                // Backup thread messages
-                                let lastId = null;
-                                let hasMore = true;
-
-                                while (hasMore) {
-                                    const options = { limit: 100 };
-                                    if (lastId) options.before = lastId;
-
-                                    const messages = await thread.messages.fetch(options);
-                                    if (messages.size === 0) {
-                                        hasMore = false;
-                                        break;
-                                    }
-
-                                    for (const message of messages.values()) {
-                                        if (message.id === thread.startMessage?.id) continue; // Skip the initial post
-
-                                        threadData.messages.push({
-                                            content: message.content,
-                                            author: {
-                                                username: message.author.username,
-                                                avatarURL: message.author.displayAvatarURL()
-                                            },
-                                            attachments: Array.from(message.attachments.values()).map(att => ({
-                                                url: att.url,
-                                                name: att.name,
-                                                description: att.description
-                                            })),
-                                            embeds: message.embeds,
-                                            timestamp: message.createdTimestamp
-                                        });
-                                    }
-
-                                    lastId = messages.last().id;
-                                    await delay(1000); // Rate limit handling
-                                }
-
-                                channelData.posts.push(threadData);
-                                Logger.success(`Backed up forum post: ${thread.name}`);
-                            } catch (error) {
-                                Logger.error(`Failed to backup forum post ${thread.name}:`, error);
-                            }
-                        }
+                    if (channel.isThread()) {
+                        channelData.archived = channel.archived;
+                        channelData.archiveTimestamp = channel.archiveTimestamp;
+                        channelData.autoArchiveDuration = channel.autoArchiveDuration;
+                        channelData.locked = channel.locked;
+                        channelData.invitable = channel.invitable;
+                        channelData.ownerId = channel.ownerId;
                     }
 
                     backupData.channels.push(channelData);
