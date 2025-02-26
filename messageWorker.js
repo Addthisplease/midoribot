@@ -1,5 +1,5 @@
 const { workerData, parentPort } = require('worker_threads');
-const { WebhookClient } = require('discord.js-selfbot-v13');
+const { WebhookClient, MessageAttachment } = require('discord.js-selfbot-v13');
 const fetch = require('node-fetch');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -16,7 +16,7 @@ async function processMessageBatch(data) {
         const webhookClient = new WebhookClient({ 
             id: webhook.id, 
             token: webhook.token,
-            url: webhook.url // Added for better reliability
+            url: webhook.url
         });
         
         const results = [];
@@ -37,33 +37,48 @@ async function processMessageBatch(data) {
                     avatarURL: message.webhookData?.avatarURL || message.author?.avatarURL,
                     files: [],
                     embeds: message.embeds || [],
-                    allowedMentions: { parse: [] } // Prevent unwanted pings
+                    allowedMentions: { parse: [] }
                 };
 
                 // Handle attachments with rate limiting
                 if (message.attachments?.length > 0) {
+                    const validAttachments = [];
                     for (const attachment of message.attachments) {
-                        try {
-                            const response = await fetch(attachment.url, { 
-                                method: 'HEAD',
-                                timeout: 5000 // 5 second timeout
-                            });
-                            
-                            if (response.ok) {
-                                webhookData.files.push({
-                                    attachment: attachment.url,
-                                    name: attachment.name || 'attachment'
-                                });
-                                await delay(1000 / RATE_LIMITS.ATTACHMENTS_PER_SECOND);
+                        if (attachment.url) {
+                            try {
+                                // Create proper MessageAttachment instance
+                                const attachmentObj = new MessageAttachment(
+                                    attachment.url,
+                                    attachment.name || 'attachment',
+                                    {
+                                        description: attachment.description,
+                                        contentType: attachment.contentType
+                                    }
+                                );
+                                validAttachments.push(attachmentObj);
+                            } catch (error) {
+                                console.error(`Failed to create attachment for ${attachment.url}:`, error);
                             }
-                        } catch (error) {
-                            console.error(`Failed to verify attachment ${attachment.url}:`, error);
                         }
+                    }
+
+                    // If we have valid attachments, send them in batches
+                    if (validAttachments.length > 0) {
+                        // Discord allows up to 10 attachments per message
+                        for (let i = 0; i < validAttachments.length; i += 10) {
+                            const batch = validAttachments.slice(i, i + 10);
+                            webhookData.files = batch;
+                            await webhookClient.send(webhookData);
+                            await delay(1000 / RATE_LIMITS.ATTACHMENTS_PER_SECOND);
+                        }
+                        webhookData.files = []; // Clear files for content-only message
                     }
                 }
 
                 // Send message and track rate limits
-                await webhookClient.send(webhookData);
+                if (message.content?.trim() || message.embeds?.length > 0) {
+                    await webhookClient.send(webhookData);
+                }
                 results.push({ success: true, messageId: message.id });
                 messageCount++;
                 lastMessageTime = Date.now();
@@ -77,7 +92,7 @@ async function processMessageBatch(data) {
                 results.push({ 
                     error: error.message, 
                     messageId: message.id,
-                    code: error.code // Include Discord error code if available
+                    code: error.code
                 });
                 
                 // Handle rate limits explicitly

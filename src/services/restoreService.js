@@ -7,6 +7,7 @@ const { delay } = require('../utils/helpers');
 const fetch = require('node-fetch');
 const { Worker } = require('worker_threads');
 const WorkerPool = require('../../workerPool');
+const { MessageAttachment } = require('discord.js-selfbot-v13');
 
 class RestoreService {
     constructor(client) {
@@ -74,23 +75,43 @@ class RestoreService {
             // Process messages
             for (const message of messages) {
                 try {
-                    // Send content
-                    if (message.content?.trim()) {
-                        await channel.send({
-                            content: message.content
-                        });
-                    }
-
-                    // Send attachments
+                    // Send content and attachments together when possible
                     if (message.attachments?.length > 0) {
+                        const validAttachments = [];
                         for (const attachment of message.attachments) {
                             if (attachment.url) {
-                                await channel.send({
-                                    files: [attachment.url]
-                                });
-                                await delay(1000);
+                                try {
+                                    const attachmentObj = new MessageAttachment(
+                                        attachment.url,
+                                        attachment.name || 'attachment',
+                                        {
+                                            description: attachment.description,
+                                            contentType: attachment.contentType
+                                        }
+                                    );
+                                    validAttachments.push(attachmentObj);
+                                } catch (error) {
+                                    Logger.error(`Failed to create attachment for ${attachment.url}:`, error);
+                                }
                             }
                         }
+
+                        // Send in batches of 10 (Discord's limit)
+                        for (let i = 0; i < validAttachments.length; i += 10) {
+                            const batch = validAttachments.slice(i, i + 10);
+                            await channel.send({
+                                content: i === 0 ? message.content : undefined,
+                                files: batch,
+                                allowedMentions: { parse: [] }
+                            });
+                            await delay(1000); // Rate limit between batches
+                        }
+                    } else if (message.content?.trim()) {
+                        // Send content-only message
+                        await channel.send({
+                            content: message.content,
+                            allowedMentions: { parse: [] }
+                        });
                     }
                     restoredCount++;
                     Logger.success(`Restored message ${restoredCount}`);
@@ -115,32 +136,47 @@ class RestoreService {
 
     async restoreDMMessage(channel, message) {
         try {
-            // Send text content
-            if (message.content?.trim()) {
-                await channel.send({
-                    content: message.content,
-                    // For DMs, we don't use webhooks, so we send as the bot
-                    allowedMentions: { parse: [] } // Prevent unwanted mentions
-                });
-            }
-
-            // Send attachments
+            const validAttachments = [];
             if (message.attachments?.length > 0) {
                 for (const attachment of message.attachments) {
-                    try {
-                        if (attachment.url) {
-                            await channel.send({
-                                files: [attachment.url],
-                                allowedMentions: { parse: [] }
-                            });
+                    if (attachment.url) {
+                        try {
+                            const attachmentObj = new MessageAttachment(
+                                attachment.url,
+                                attachment.name || 'attachment',
+                                {
+                                    description: attachment.description,
+                                    contentType: attachment.contentType
+                                }
+                            );
+                            validAttachments.push(attachmentObj);
+                        } catch (error) {
+                            Logger.error(`Failed to create attachment for ${attachment.url}:`, error);
                         }
-                        await this.delay(1000); // Rate limit between attachments
-                    } catch (error) {
-                        Logger.error(`Failed to restore attachment: ${error.message}`);
                     }
                 }
             }
-            await this.delay(1000); // Rate limit between messages
+
+            // Send content and attachments together when possible
+            if (validAttachments.length > 0) {
+                // Send in batches of 10 (Discord's limit)
+                for (let i = 0; i < validAttachments.length; i += 10) {
+                    const batch = validAttachments.slice(i, i + 10);
+                    await channel.send({
+                        content: i === 0 ? message.content : undefined,
+                        files: batch,
+                        allowedMentions: { parse: [] }
+                    });
+                    await delay(1000); // Rate limit between batches
+                }
+            } else if (message.content?.trim()) {
+                // Send content-only message
+                await channel.send({
+                    content: message.content,
+                    allowedMentions: { parse: [] }
+                });
+            }
+            await delay(1000); // Rate limit between messages
         } catch (error) {
             Logger.error(`Failed to restore DM message: ${error.message}`);
             throw error;
@@ -151,25 +187,46 @@ class RestoreService {
         const messageOptions = {
             username: message.webhookData?.username || message.author,
             avatarURL: message.webhookData?.avatarURL,
-            content: message.content
+            content: message.content,
+            allowedMentions: { parse: [] }
         };
 
-        // Send text content
-        if (message.content?.trim()) {
-            await webhook.send(messageOptions);
-        }
-
-        // Send attachments
+        const validAttachments = [];
         if (message.attachments?.length > 0) {
             for (const attachment of message.attachments) {
                 if (attachment.url) {
-                    await webhook.send({
-                        ...messageOptions,
-                        files: [attachment.url]
-                    });
-                    await delay(1000);
+                    try {
+                        const attachmentObj = new MessageAttachment(
+                            attachment.url,
+                            attachment.name || 'attachment',
+                            {
+                                description: attachment.description,
+                                contentType: attachment.contentType
+                            }
+                        );
+                        validAttachments.push(attachmentObj);
+                    } catch (error) {
+                        Logger.error(`Failed to create attachment for ${attachment.url}:`, error);
+                    }
                 }
             }
+        }
+
+        // Send content and attachments together when possible
+        if (validAttachments.length > 0) {
+            // Send in batches of 10 (Discord's limit)
+            for (let i = 0; i < validAttachments.length; i += 10) {
+                const batch = validAttachments.slice(i, i + 10);
+                await webhook.send({
+                    ...messageOptions,
+                    content: i === 0 ? message.content : undefined,
+                    files: batch
+                });
+                await delay(1000); // Rate limit between batches
+            }
+        } else if (message.content?.trim()) {
+            // Send content-only message
+            await webhook.send(messageOptions);
         }
     }
 
